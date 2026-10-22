@@ -48,6 +48,26 @@ Vary: Accept
 Transfer-Encoding: chunked`,
     },
   },
+  jelly: {
+    link: {
+      request: `GET /notifications?count=8&interval=250 HTTP/1.1
+Accept: application/x-jelly-rdf`,
+      response: `HTTP/1.1 200 OK
+Content-Type: application/x-jelly-rdf
+Cache-Control: no-store
+Vary: Accept
+Transfer-Encoding: chunked`,
+    },
+    inline: {
+      request: `GET /notifications?count=8&interval=250 HTTP/1.1
+Accept: application/x-jelly-rdf`,
+      response: `HTTP/1.1 200 OK
+Content-Type: application/x-jelly-rdf
+Cache-Control: no-store
+Vary: Accept
+Transfer-Encoding: chunked`,
+    },
+  },
 };
 
 export function HttpExchange(props: {
@@ -61,7 +81,11 @@ export function HttpExchange(props: {
     <section class="http-exchange" aria-label="Illustrative HTTP exchange">
       <div class="http-exchange-heading">
         <span>Illustrative HTTP exchange</span>
-        <span>static example · {props.inlineContext ? 'inline context' : 'link-only'}</span>
+        <span>
+          {props.representation === 'jelly'
+            ? 'static example'
+            : `static example · ${props.inlineContext ? 'inline context' : 'link-only'}`}
+        </span>
       </div>
       <div class="http-exchange-grid">
         <div>

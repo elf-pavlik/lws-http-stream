@@ -106,12 +106,15 @@ async function checkHealth() {
 }
 
 async function checkStreams() {
-  const [ndjson, cbor] = await Promise.all([
+  const [ndjson, cbor, jelly] = await Promise.all([
     fetch(`${origin}/notifications?count=3&interval=0`, {
       headers: { Accept: 'application/x-ndjson' },
     }),
     fetch(`${origin}/notifications?count=3&interval=0`, {
       headers: { Accept: 'application/cbor-seq' },
+    }),
+    fetch(`${origin}/notifications?count=3&interval=0`, {
+      headers: { Accept: 'application/x-jelly-rdf' },
     }),
   ]);
 
@@ -140,11 +143,19 @@ async function checkStreams() {
   assert.deepEqual(Array.from(inlineCborBytes.subarray(0, 3)), [0xd9, 0xcb, 0x1d]);
   assert.equal(inlineCbor.headers.get('link'), null);
 
+  assert.equal(jelly.status, 200);
+  assert.equal(jelly.headers.get('content-type'), 'application/x-jelly-rdf');
+  assert.equal(jelly.headers.get('link'), null);
+  const jellyBytes = new Uint8Array(await jelly.arrayBuffer());
+  assert.ok(jellyBytes.byteLength > 10);
+  assert.notEqual(jellyBytes[0], 0x0a);
+
   assert.ok(ndjson.headers.get('link'));
   assert.equal(ndjson.headers.get('link'), cbor.headers.get('link'));
   console.log(
     `Vercel streams: ${ndjsonBytes.byteLength} NDJSON bytes, ` +
-      `${cborBytes.byteLength} plain CBOR bytes, ${inlineCborBytes.byteLength} inline CBOR-LD bytes`,
+      `${cborBytes.byteLength} plain CBOR bytes, ${inlineCborBytes.byteLength} inline CBOR-LD bytes, ` +
+      `${jellyBytes.byteLength} Jelly bytes`,
   );
 }
 

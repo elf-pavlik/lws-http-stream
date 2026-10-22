@@ -9,11 +9,15 @@ describe('content negotiation', () => {
     expect(negotiateAccept('   ')?.representation).toBe('ndjson');
   });
 
-  it('accepts both exact media types, case-insensitively and with parameters', () => {
+  it('accepts all exact media types, case-insensitively and with parameters', () => {
     expect(negotiateAccept('application/x-ndjson')?.mediaType).toBe('application/x-ndjson');
     expect(negotiateAccept('Application/CBOR-Seq')?.representation).toBe('cbor-seq');
     expect(negotiateAccept('application/x-ndjson; charset=utf-8')?.representation).toBe('ndjson');
     expect(negotiateAccept('application/cbor-seq; q=0.5')?.representation).toBe('cbor-seq');
+    expect(negotiateAccept('Application/X-Jelly-RDF')?.representation).toBe('jelly');
+    expect(negotiateAccept('application/x-jelly-rdf; q=0.8')?.mediaType).toBe(
+      'application/x-jelly-rdf',
+    );
   });
 
   it('uses quality values and prefers the default on ties', () => {
@@ -29,6 +33,10 @@ describe('content negotiation', () => {
       negotiateAccept('application/cbor-seq, application/x-ndjson;q=0.9')
         ?.representation,
     ).toBe('cbor-seq');
+    expect(
+      negotiateAccept('application/x-jelly-rdf;q=0.7, application/x-ndjson;q=0.3')
+        ?.representation,
+    ).toBe('jelly');
   });
 
   it('handles wildcards', () => {
@@ -52,7 +60,11 @@ describe('content negotiation', () => {
   it('returns null when no supported representation is acceptable', () => {
     expect(negotiateAccept('text/html')).toBeNull();
     expect(negotiateAccept('application/json')).toBeNull();
-    expect(negotiateAccept('application/x-ndjson;q=0, application/cbor-seq;q=0')).toBeNull();
+    expect(
+      negotiateAccept(
+        'application/x-ndjson;q=0, application/cbor-seq;q=0, application/x-jelly-rdf;q=0',
+      ),
+    ).toBeNull();
     expect(negotiateAccept('not a media type')).toBeNull();
     expect(negotiateAccept('application/x-ndjson;q=bogus')).toBeNull();
   });

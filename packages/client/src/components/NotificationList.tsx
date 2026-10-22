@@ -45,7 +45,7 @@ export function NotificationList(props: {
                     </For>
                   </div>
                   <div class="notification-meta">
-                    <span>{formatBytes(item.bytes)} encoded</span>
+                    <span>{item.bytes > 0 ? `${formatBytes(item.bytes)} encoded` : 'stream frame'}</span>
                     <span>{activitiesOf(item.notification).length} activity(ies)</span>
                     <span>at {Math.round(item.atMs)} ms</span>
                   </div>

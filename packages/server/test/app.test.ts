@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
+import { Parser } from 'rdfjs-jelly/browser';
 import { decodePlainCborItem } from '../src/cbor.ts';
 import { splitCborSequence } from '../src/cbor-sequence.ts';
 import { decodeCborLdItem, stripContext } from '../src/cborld.ts';
+import { notificationToQuads } from '../src/jelly.ts';
 import { app } from '../src/app.ts';
 import { LWS_CONTEXT_DOCUMENT, LWS_CONTEXT_VALUE } from '../src/context.ts';
 import { notificationFixtures } from '../src/notifications.ts';
@@ -60,6 +62,29 @@ describe('notification endpoint — link-only mode (default)', () => {
       return document;
     });
     expect(decoded).toEqual(notificationFixtures.slice(0, 3));
+  });
+
+  it('returns a length-delimited Jelly-RDF stream without a Link header', async () => {
+    const response = await request('/notifications?count=3&interval=0', 'application/x-jelly-rdf');
+    expect(response.status).toBe(200);
+    expect(response.headers.get('content-type')).toBe('application/x-jelly-rdf');
+    expect(response.headers.get('link')).toBeNull();
+
+    const bytes = new Uint8Array(await response.arrayBuffer());
+    expect(bytes[0]).not.toBe(0x0a);
+    const messages = new Parser({ messages: true }).parseMessages(bytes);
+    expect(messages).toHaveLength(3);
+    expect(messages.map(message => message.length)).toEqual(
+      notificationFixtures.slice(0, 3).map(notification => notificationToQuads(notification).length),
+    );
+    expect(
+      messages[0]!.some(
+        quad =>
+          quad.predicate.value ===
+            'http://www.w3.org/1999/02/22-rdf-syntax-ns#type' &&
+          quad.object.value === 'https://www.w3.org/ns/lws#Notification',
+      ),
+    ).toBe(true);
   });
 
   it('carries exactly the same logical notifications in both representations', async () => {
@@ -156,11 +181,15 @@ describe('request validation and routes', () => {
     expect(response.status).toBe(406);
     expect(response.headers.get('content-type')).toContain('application/json');
     expect(response.headers.get('accept')).toBe(
-      'application/x-ndjson, application/cbor-seq',
+      'application/x-ndjson, application/cbor-seq, application/x-jelly-rdf',
     );
     expect(await response.json()).toMatchObject({
       error: 'not_acceptable',
-      supported: ['application/x-ndjson', 'application/cbor-seq'],
+      supported: [
+        'application/x-ndjson',
+        'application/cbor-seq',
+        'application/x-jelly-rdf',
+      ],
     });
   });
 
@@ -204,7 +233,7 @@ describe('context and health routes', () => {
     expect(await response.json()).toMatchObject({
       status: 'ok',
       service: 'lws-http-stream',
-      representations: ['ndjson', 'cbor-seq'],
+      representations: ['ndjson', 'cbor-seq', 'jelly'],
       defaultRepresentation: 'ndjson',
       contextModes: ['link', 'inline'],
       defaultContextMode: 'link',

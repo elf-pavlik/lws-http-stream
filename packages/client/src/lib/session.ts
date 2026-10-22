@@ -2,6 +2,7 @@ import { createSignal, onCleanup, onMount } from 'solid-js';
 import { parseContextLink, requestNotificationStream } from '../api.ts';
 import { decodePlainCborItem } from './cbor.ts';
 import { decodeCborLdItem } from './cborld.ts';
+import { readJellyStream } from './jelly.ts';
 import { readCborSequenceStream, readNdjsonStream } from './readers.ts';
 import { initialStats } from './stats.ts';
 import type { ReceivedNotification, Representation, StreamStats } from './types.ts';
@@ -147,7 +148,9 @@ export function createStreamSession(
           },
         };
 
-        if (representation === 'cbor-seq') {
+        if (representation === 'jelly') {
+          await readJellyStream(response, callbacks, controller.signal);
+        } else if (representation === 'cbor-seq') {
           const decodeItem = options.inlineContext ? decodeCborLdItem : decodePlainCborItem;
           await readCborSequenceStream(response, decodeItem, callbacks, controller.signal);
         } else {

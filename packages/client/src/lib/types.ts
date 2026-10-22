@@ -1,4 +1,4 @@
-export type Representation = 'ndjson' | 'cbor-seq';
+export type Representation = 'ndjson' | 'cbor-seq' | 'jelly';
 
 export interface LwsActivityObject {
   id: string;

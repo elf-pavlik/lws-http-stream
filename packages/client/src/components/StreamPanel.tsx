@@ -10,9 +10,9 @@ export function StreamPanel(props: {
   mediaType: string;
   session: StreamSession;
   counterpartIds: Set<string>;
-  tone: 'ndjson' | 'cbor';
-  inlineContext: boolean;
-  onToggleContext: () => void;
+  tone: 'ndjson' | 'cbor' | 'jelly';
+  inlineContext?: boolean;
+  onToggleContext?: () => void;
 }) {
   return (
     <section class={`panel panel-${props.tone}`}>
@@ -22,10 +22,12 @@ export function StreamPanel(props: {
           <code class="media-type">{props.mediaType}</code>
         </div>
         <div class="panel-actions">
-          <ContextToggle
-            checked={props.inlineContext}
-            onToggle={props.onToggleContext}
-          />
+          {props.inlineContext !== undefined && props.onToggleContext ? (
+            <ContextToggle
+              checked={props.inlineContext}
+              onToggle={props.onToggleContext}
+            />
+          ) : null}
           <span class="encoding-badge">{props.tone === 'ndjson' ? 'text' : 'binary'}</span>
         </div>
       </header>
@@ -34,7 +36,7 @@ export function StreamPanel(props: {
 
       <HttpExchange
         representation={props.session.representation}
-        inlineContext={props.inlineContext}
+        inlineContext={props.inlineContext ?? false}
       />
 
       <NotificationList

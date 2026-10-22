@@ -70,7 +70,9 @@ export function createApp(options: AppOptions = {}): Hono {
       return c.json(
         {
           error: 'not_acceptable',
-          message: 'Supported media types are application/x-ndjson and application/cbor-seq.',
+          message:
+            'Supported media types are application/x-ndjson, application/cbor-seq, ' +
+            'and application/x-jelly-rdf.',
           supported: REPRESENTATIONS.map(representation => MEDIA_TYPES[representation]),
         },
         406,
@@ -103,8 +105,9 @@ export function createApp(options: AppOptions = {}): Hono {
       return invalidQuery(c, 'interval', 0, MAX_INTERVAL_MS);
     }
 
+    const isJelly = negotiation.representation === 'jelly';
     const contextMode = c.req.query('context') ?? DEFAULT_CONTEXT_MODE;
-    if (contextMode !== 'link' && contextMode !== 'inline') {
+    if (!isJelly && contextMode !== 'link' && contextMode !== 'inline') {
       return invalidContextMode(c);
     }
 
@@ -113,7 +116,7 @@ export function createApp(options: AppOptions = {}): Hono {
     const body = createNotificationStream({
       notifications,
       representation: negotiation.representation,
-      inlineContext: contextMode === 'inline',
+      inlineContext: !isJelly && contextMode === 'inline',
       intervalMs,
       signal: c.req.raw.signal,
       onChunk: options.onChunk,
@@ -128,7 +131,7 @@ export function createApp(options: AppOptions = {}): Hono {
       'Access-Control-Expose-Headers': 'Link',
     };
 
-    if (contextMode === 'link') {
+    if (!isJelly && contextMode === 'link') {
       headers.Link =
         `<${contextUrlFor(c.req.url)}>; rel="${JSON_LD_CONTEXT_REL}"; ` +
         'type="application/ld+json"';

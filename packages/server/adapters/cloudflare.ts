@@ -1,5 +1,20 @@
-import { app } from '../src/app.ts';
 import { LWS_CONTEXT_PATH } from '../src/context.ts';
+
+/**
+ * workerd exposes a partial Node Buffer shim. protobufjs (used by
+ * rdfjs-jelly) detects Buffer.prototype.utf8Write and then uses a BufferWriter
+ * whose utf8Write implementation fails on longer namespace/IRI strings.
+ *
+ * Hide Buffer while the shared app and rdfjs-jelly modules are evaluated so
+ * protobufjs selects its Uint8Array writer. The original global is restored
+ * afterwards for any other code that expects it.
+ */
+const savedBuffer = (globalThis as { Buffer?: unknown }).Buffer;
+(globalThis as { Buffer?: unknown }).Buffer = undefined;
+const { app } = await import('../src/app.ts');
+if (savedBuffer !== undefined) {
+  (globalThis as { Buffer?: unknown }).Buffer = savedBuffer;
+}
 
 interface AssetsBinding {
   fetch(request: Request): Promise<Response>;

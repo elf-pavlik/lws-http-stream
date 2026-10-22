@@ -3,6 +3,7 @@ import type { Representation } from './lib/types.ts';
 export const MEDIA_TYPES: Readonly<Record<Representation, string>> = {
   ndjson: 'application/x-ndjson',
   'cbor-seq': 'application/cbor-seq',
+  jelly: 'application/x-jelly-rdf',
 };
 
 const JSON_LD_CONTEXT_REL = 'http://www.w3.org/ns/json-ld#context';
@@ -18,12 +19,15 @@ export function notificationsUrl(options: {
   count: number;
   intervalMs: number;
   inlineContext: boolean;
+  representation?: Representation;
 }): string {
   const params = new URLSearchParams({
     count: String(options.count),
     interval: String(options.intervalMs),
-    context: options.inlineContext ? 'inline' : 'link',
   });
+  if (options.representation !== 'jelly') {
+    params.set('context', options.inlineContext ? 'inline' : 'link');
+  }
   return `/notifications?${params.toString()}`;
 }
 
@@ -31,14 +35,17 @@ export async function requestNotificationStream(
   representation: Representation,
   options: StreamRequestOptions,
 ): Promise<Response> {
-  const response = await fetch(notificationsUrl(options), {
-    method: 'GET',
-    headers: {
-      Accept: MEDIA_TYPES[representation],
+  const response = await fetch(
+    notificationsUrl({ ...options, representation }),
+    {
+      method: 'GET',
+      headers: {
+        Accept: MEDIA_TYPES[representation],
+      },
+      cache: 'no-store',
+      signal: options.signal,
     },
-    cache: 'no-store',
-    signal: options.signal,
-  });
+  );
 
   if (!response.ok) {
     const detail = await response.text().catch(() => '');

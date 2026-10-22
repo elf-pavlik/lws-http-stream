@@ -57,6 +57,19 @@ assert.deepEqual(Array.from(inlineBody.subarray(0, 3)), [0xd9, 0xcb, 0x1d]);
 assert.equal(inlineResponse.headers.get('link'), null);
 log(`  inline CBOR-LD body: ${inlineBody.byteLength} bytes`);
 
+const jellyResponse = await notificationsEntry.fetch(
+  new Request(`${origin}/api/notifications?count=2&interval=0`, {
+    headers: { Accept: 'application/x-jelly-rdf' },
+  }),
+);
+assert.equal(jellyResponse.status, 200);
+assert.equal(jellyResponse.headers.get('content-type'), 'application/x-jelly-rdf');
+assert.equal(jellyResponse.headers.get('link'), null);
+const jellyBody = new Uint8Array(await jellyResponse.arrayBuffer());
+assert.ok(jellyBody.byteLength > 10);
+assert.notEqual(jellyBody[0], 0x0a);
+log(`  Jelly-RDF body: ${jellyBody.byteLength} bytes`);
+
 const health = await healthEntry.fetch(new Request(`${origin}/api/health`));
 assert.equal(health.status, 200);
 assert.equal((await health.json()).status, 'ok');

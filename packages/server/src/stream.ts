@@ -1,5 +1,6 @@
 import { encodePlainCborNotification } from './cbor.ts';
 import { encodeCborLdNotification } from './cborld.ts';
+import { createJellyNotificationEncoder } from './jelly.ts';
 import { withInlineContext } from './context.ts';
 import type { LwsNotification } from './notifications.ts';
 import { encodeNdjsonNotification } from './ndjson.ts';
@@ -78,6 +79,9 @@ export function createNotificationStream(
 
   return new ReadableStream<Uint8Array>({
     async start(controller) {
+      const jellyEncoder =
+        representation === 'jelly' ? createJellyNotificationEncoder() : undefined;
+
       try {
         for (let index = 0; index < notifications.length; index += 1) {
           if (cancelled) {
@@ -93,21 +97,27 @@ export function createNotificationStream(
           }
 
           const notification = notifications[index]!;
-          const bytes =
-            representation === 'ndjson'
-              ? encodeNdjsonNotification(
-                  inlineContext ? withInlineContext(notification) : notification,
-                )
-              : inlineContext
-                ? await encodeCborLdNotification(notification)
-                : encodePlainCborNotification(notification);
+          const encodedChunks: Uint8Array[] =
+            representation === 'jelly'
+              ? jellyEncoder!.addNotification(notification)
+              : [
+                  representation === 'ndjson'
+                    ? encodeNdjsonNotification(
+                        inlineContext ? withInlineContext(notification) : notification,
+                      )
+                    : inlineContext
+                      ? await encodeCborLdNotification(notification)
+                      : encodePlainCborNotification(notification),
+                ];
 
           if (cancelled) {
             break;
           }
 
           try {
-            controller.enqueue(bytes);
+            for (const bytes of encodedChunks) {
+              controller.enqueue(bytes);
+            }
           } catch (error) {
             if (cancelled) {
               break;
@@ -115,10 +125,19 @@ export function createNotificationStream(
             throw error;
           }
 
-          onChunk?.({ index, notification, bytes });
+          onChunk?.({
+            index,
+            notification,
+            bytes: encodedChunks.at(-1) ?? new Uint8Array(),
+          });
         }
 
         if (!consumerCancelled) {
+          if (jellyEncoder) {
+            for (const bytes of jellyEncoder.finish()) {
+              controller.enqueue(bytes);
+            }
+          }
           controller.close();
         }
       } catch (error) {

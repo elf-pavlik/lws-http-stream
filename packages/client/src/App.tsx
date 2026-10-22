@@ -27,21 +27,40 @@ export default function App() {
     intervalMs: INITIAL_INTERVAL_MS,
     inlineContext: false,
   });
+  const jelly = createStreamSession('jelly', {
+    count: INITIAL_COUNT,
+    intervalMs: INITIAL_INTERVAL_MS,
+    inlineContext: false,
+  });
 
   const ndjsonIds = createMemo(() => new Set(ndjson.items().map(item => item.id)));
   const cborIds = createMemo(() => new Set(cbor.items().map(item => item.id)));
+  const jellyIds = createMemo(() => new Set(jelly.items().map(item => item.id)));
 
   const matchedIds = createMemo(() => {
-    const other = cborIds();
-    return new Set(ndjson.items().map(item => item.id).filter(id => other.has(id)));
+    const cborSet = cborIds();
+    const jellySet = jellyIds();
+    return new Set(
+      ndjson
+        .items()
+        .map(item => item.id)
+        .filter(id => cborSet.has(id) && jellySet.has(id)),
+    );
   });
 
   const identicalCount = createMemo(() => {
-    const byId = new Map(cbor.items().map(item => [item.id, item.notification]));
+    const cborById = new Map(cbor.items().map(item => [item.id, item.notification]));
+    const jellyById = new Map(jelly.items().map(item => [item.id, item.notification]));
     let identical = 0;
     for (const item of ndjson.items()) {
-      const counterpart = byId.get(item.id);
-      if (counterpart && documentsEqual(item.notification, counterpart)) {
+      const cborCounterpart = cborById.get(item.id);
+      const jellyCounterpart = jellyById.get(item.id);
+      if (
+        cborCounterpart &&
+        jellyCounterpart &&
+        documentsEqual(item.notification, cborCounterpart) &&
+        documentsEqual(item.notification, jellyCounterpart)
+      ) {
         identical += 1;
       }
     }
@@ -49,16 +68,26 @@ export default function App() {
   });
 
   const orderMatches = createMemo(() => {
-    const left = ndjson.items().map(item => item.id);
-    const right = cbor.items().map(item => item.id);
-    if (left.length !== right.length) {
+    const ndjsonOrder = ndjson.items().map(item => item.id);
+    const cborOrder = cbor.items().map(item => item.id);
+    const jellyOrder = jelly.items().map(item => item.id);
+    if (
+      ndjsonOrder.length !== cborOrder.length ||
+      ndjsonOrder.length !== jellyOrder.length
+    ) {
       return null;
     }
-    return left.every((id, index) => id === right[index]);
+    return (
+      ndjsonOrder.every((id, index) => id === cborOrder[index]) &&
+      ndjsonOrder.every((id, index) => id === jellyOrder[index])
+    );
   });
 
-  const reduction = createMemo(() =>
+  const cborReduction = createMemo(() =>
     sizeReduction(ndjson.stats().bytesReceived, cbor.stats().bytesReceived),
+  );
+  const jellyReduction = createMemo(() =>
+    sizeReduction(ndjson.stats().bytesReceived, jelly.stats().bytesReceived),
   );
 
   const sharedContext = createMemo(() => {
@@ -82,6 +111,11 @@ export default function App() {
       count: nextCount,
       intervalMs: nextInterval,
       inlineContext: cborInlineContext(),
+    });
+    jelly.start({
+      count: nextCount,
+      intervalMs: nextInterval,
+      inlineContext: false,
     });
   };
 
@@ -111,6 +145,7 @@ export default function App() {
   const stopBoth = (): void => {
     ndjson.stop();
     cbor.stop();
+    jelly.stop();
   };
 
   return (
@@ -118,13 +153,13 @@ export default function App() {
       <header class="hero">
         <div class="eyebrow">Linked Web Storage · streaming notifications</div>
         <h1>
-          NDJSON <span>vs.</span> CBOR
+          NDJSON <span>vs.</span> CBOR <span>vs.</span> Jelly
         </h1>
         <p class="lede">
-          Two concurrent HTTP streams carry the same ordered LWS notifications. The left stream
-          is compact NDJSON; the right stream is an RFC 8742 CBOR Sequence. With @context off the
-          CBOR items are plain CBOR; with @context on they are compressed CBOR-LD. Every byte
-          shown below comes from the actual response bodies.
+          Three concurrent HTTP streams carry the same ordered LWS notifications: compact
+          NDJSON, an RFC 8742 CBOR Sequence, and a length-delimited Jelly-RDF stream. With
+          @context off the CBOR items are plain CBOR; with @context on they are compressed
+          CBOR-LD. Every byte shown below comes from the actual response bodies.
         </p>
       </header>
 
@@ -159,23 +194,30 @@ export default function App() {
           </button>
         </form>
         <p class="hint">
-          Each panel has its own @context toggle and re-runs that stream immediately. Off: the
-          context is only in the Link header. On: the context URL array is inlined into every
-          notification. Use a longer interval to exercise streaming and cancellation.
+          The NDJSON and CBOR panels each have their own @context toggle and re-run that stream
+          immediately. Off: the context is only in the Link header. On: the context URL array is
+          inlined into every notification. Jelly-RDF has no context toggle. Use a longer interval
+          to exercise streaming and cancellation.
         </p>
       </section>
 
       <section class="summary" aria-label="Comparison summary">
         <div class="summary-card summary-reduction">
-          <span>CBOR size reduction</span>
-          <strong>{formatPercent(reduction())}</strong>
+          <span>CBOR vs NDJSON</span>
+          <strong>{formatPercent(cborReduction())}</strong>
           <small>plain CBOR or CBOR-LD, depending on the @context toggle</small>
+        </div>
+        <div class="summary-card summary-jelly">
+          <span>Jelly vs NDJSON</span>
+          <strong>{formatPercent(jellyReduction())}</strong>
+          <small>size reduction using NDJSON as baseline</small>
         </div>
         <div class="summary-card">
           <span>Matched IDs</span>
           <strong>{matchedIds().size}</strong>
           <small>
-            {ndjson.items().length} NDJSON · {cbor.items().length} CBOR
+            {ndjson.items().length} NDJSON · {cbor.items().length} CBOR ·{' '}
+            {jelly.items().length} Jelly
           </small>
         </div>
         <div class="summary-card">
@@ -198,7 +240,7 @@ export default function App() {
       <Show when={sharedContext()}>
         {contextUrl => (
           <div class="context-banner">
-            <span>Both responses advertise the same response-level context:</span>
+            <span>NDJSON and CBOR advertise the same response-level context:</span>
             <a href={contextUrl()} target="_blank" rel="noreferrer">
               {contextUrl()}
             </a>
@@ -225,17 +267,25 @@ export default function App() {
           inlineContext={cborInlineContext()}
           onToggleContext={toggleCborContext}
         />
+        <StreamPanel
+          title="Jelly-RDF"
+          mediaType="application/x-jelly-rdf"
+          session={jelly}
+          counterpartIds={ndjsonIds()}
+          tone="jelly"
+        />
       </div>
 
       <section class="methodology">
         <h2>How the numbers are produced</h2>
         <p>
           Each stream is read independently with a streaming reader. NDJSON is split on LF bytes;
-          CBOR items are framed incrementally according to RFC 8742, including when an item spans
-          transport chunks. Off mode uses plain CBOR and link-only context; on mode inlines the
-          context and uses CBOR-LD compression. Size reduction is{' '}
-          <code>100 × (NDJSON bytes − CBOR bytes) / NDJSON bytes</code>, using response-body bytes
-          only. HTTP headers, the context document, and transport compression are excluded.
+          CBOR items are framed incrementally according to RFC 8742; Jelly frames are decoded from
+          varint length-prefixed Protobuf messages. Off mode uses plain CBOR and link-only context;
+          on mode inlines the context and uses CBOR-LD compression. Both reduction figures use
+          NDJSON as the baseline: <code>100 × (NDJSON bytes − CBOR bytes) / NDJSON bytes</code>{' '}
+          and <code>100 × (NDJSON bytes − Jelly bytes) / NDJSON bytes</code>. HTTP headers, the
+          context document, and transport compression are excluded.
         </p>
         <ul>
           <For
@@ -243,7 +293,7 @@ export default function App() {
               'Committed generated fixtures keep both requests byte-comparable.',
               'The first chunk is flushed immediately; later chunks are spaced by the interval.',
               'Cancelling a stream aborts the fetch and stops the server-side producer.',
-              'The client treats every decoded item as plain JSON and never performs RDF processing.',
+              'Jelly frames are decoded to RDF/JS quads only to reconstruct the same notification fields; no RDF querying or JSON-LD expansion is performed.',
             ]}
           >
             {point => <li>{point}</li>}

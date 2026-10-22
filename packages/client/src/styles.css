@@ -13,6 +13,8 @@
   --amber-soft: rgba(245, 185, 95, 0.14);
   --cyan: #58ddc8;
   --cyan-soft: rgba(88, 221, 200, 0.13);
+  --violet: #c7a0ff;
+  --violet-soft: rgba(199, 160, 255, 0.13);
   --red: #ff8b8b;
   --green: #78e0a3;
   --blue: #8eb8ff;
@@ -283,7 +285,7 @@ button.context-toggle.active .context-toggle-state {
 
 .summary {
   display: grid;
-  grid-template-columns: 1.25fr 1fr 1fr 1fr;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 10px;
   margin-bottom: 18px;
 }
@@ -324,6 +326,17 @@ button.context-toggle.active .context-toggle-state {
   color: var(--cyan);
 }
 
+.summary-jelly {
+  border-color: rgba(199, 160, 255, 0.34);
+  background:
+    radial-gradient(circle at 100% 0%, rgba(199, 160, 255, 0.16), transparent 17rem),
+    rgba(15, 24, 42, 0.8);
+}
+
+.summary-jelly strong {
+  color: var(--violet);
+}
+
 .context-banner {
   display: flex;
   flex-wrap: wrap;
@@ -339,7 +352,7 @@ button.context-toggle.active .context-toggle-state {
 
 .panels {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 16px;
 }
 
@@ -359,6 +372,10 @@ button.context-toggle.active .context-toggle-state {
 
 .panel-cbor {
   border-top: 3px solid var(--cyan);
+}
+
+.panel-jelly {
+  border-top: 3px solid var(--violet);
 }
 
 .panel-header {
@@ -381,6 +398,10 @@ button.context-toggle.active .context-toggle-state {
 
 .panel-cbor .panel-header h2 {
   color: var(--cyan);
+}
+
+.panel-jelly .panel-header h2 {
+  color: var(--violet);
 }
 
 .media-type {
@@ -541,7 +562,7 @@ button.context-toggle.active .context-toggle-state {
 
 .http-exchange-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr);
   gap: 8px;
 }
 
@@ -597,6 +618,10 @@ button.context-toggle.active .context-toggle-state {
 
 .panel-cbor .notification {
   border-left: 2px solid rgba(88, 221, 200, 0.55);
+}
+
+.panel-jelly .notification {
+  border-left: 2px solid rgba(199, 160, 255, 0.55);
 }
 
 .notification-topline {
@@ -733,6 +758,16 @@ button.context-toggle.active .context-toggle-state {
 .methodology ul {
   margin: 12px 0 0;
   padding-left: 20px;
+}
+
+@media (max-width: 1250px) {
+  .summary {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .panels {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 980px) {

@@ -1,21 +1,26 @@
-# LWS notification streaming: NDJSON vs CBOR Sequence
+# LWS notification streaming: NDJSON, CBOR Sequence, and Jelly-RDF
 
 >[!NOTE]
 > Generated with opencode-go/DeepSeek V4.1 Flash (max)
 
 A small full-stack demonstration of streaming Linked Web Storage (LWS)
-notifications over HTTP, comparing two representations of the same ordered
+notifications over HTTP, comparing three representations of the same ordered
 notification sequence:
 
 - **NDJSON**: one compact JSON document per line, `application/x-ndjson`.
 - **CBOR Sequence**: plain CBOR items in link-only mode, or compressed CBOR-LD
   items when `@context` is inlined, `application/cbor-seq`.
+- **Jelly-RDF**: length-delimited `RdfStreamFrame` messages with RDF/JS quads,
+  `application/x-jelly-rdf`.
 
-A UI toggle controls whether the context is only advertised in the HTTP `Link`
-header (default) or is also inlined into every notification. The SolidJS client
-opens both streams concurrently, decodes them incrementally as plain JSON,
-matches notifications by ID, and computes byte statistics from the actual
-response bodies. It never performs RDF processing.
+Each NDJSON/CBOR panel has its own `@context` toggle controlling whether the
+context is only advertised in the HTTP `Link` header (default) or is also
+inlined into every notification. The Jelly panel has no context toggle; it is a
+binary RDF stream. The SolidJS client opens all three streams concurrently,
+decodes them incrementally, matches notifications by ID, and computes byte
+statistics from the actual response bodies. The Jelly panel reconstructs
+notifications from decoded RDF/JS quads for display; no RDF querying or JSON-LD
+expansion is performed.
 
 The server is shared TypeScript using Web-standard `Request`, `Response`,
 `ReadableStream`, and `Uint8Array` APIs. It runs directly on Node.js with native
@@ -49,11 +54,12 @@ local development.
 
 The server defaults to 8 generated notifications at 250 ms intervals. The
 client starts with a 50-notification, 500 ms stream so the page has time to
-demonstrate streaming. Each stream panel has its own `@context` toggle; toggling
-one immediately re-runs only that stream. Change the count/interval controls or
-press **Stop both** to test cancellation.
+demonstrate streaming. The NDJSON and CBOR panels each have their own `@context`
+toggle; toggling one immediately re-runs only that stream. The Jelly stream is
+independent of the context mode. Change the count/interval controls or press
+**Stop both** to test cancellation.
 
-### Get both representations with curl
+### Get all three representations with curl
 
 With `npm run dev` running, use the Vite proxy origin:
 
@@ -69,6 +75,14 @@ curl -sS -D /tmp/cbor-seq.headers \
   -o /tmp/cbor-seq.bin
 cat /tmp/cbor-seq.headers
 od -An -tx1 -N 48 /tmp/cbor-seq.bin
+
+# Jelly-RDF: binary length-delimited frames, no newline delimiters
+curl -sS -D /tmp/jelly.headers \
+  'http://localhost:5173/notifications?count=3&interval=0' \
+  -H 'Accept: application/x-jelly-rdf' \
+  -o /tmp/notifications.jelly
+cat /tmp/jelly.headers
+od -An -tx1 -N 48 /tmp/notifications.jelly
 
 # The response-level JSON-LD context advertised by Link
 curl -i 'http://localhost:5173/contexts/lws-notifications-v1.jsonld' \
@@ -87,7 +101,7 @@ avoids dumping binary data into the terminal.
 |---|---:|---:|---|
 | `count` | `8` | 1–100 | Number of notifications; fixtures repeat if needed |
 | `interval` | `250` | 0–5000 ms | Delay between notifications |
-| `context` | `link` | `link` or `inline` | Context only in Link, or inlined into every notification |
+| `context` | `link` | `link` or `inline` | NDJSON/CBOR only; ignored for Jelly |
 
 Content negotiation:
 
@@ -95,8 +109,9 @@ Content negotiation:
 |---|---|
 | `application/x-ndjson` | NDJSON stream |
 | `application/cbor-seq` | RFC 8742 CBOR Sequence (plain CBOR or CBOR-LD, depending on `context`) |
+| `application/x-jelly-rdf` | Length-delimited Jelly-RDF `RdfStreamFrame` stream |
 | missing / empty | NDJSON (documented default) |
-| `*/*` or `application/*` | NDJSON unless quality values select CBOR |
+| `*/*` or `application/*` | NDJSON unless quality values select another representation |
 | unsupported only | `406 Not Acceptable` |
 
 Standard quality values and specificity are honored. An exact `q=0` excludes a
@@ -111,10 +126,11 @@ Cache-Control: no-store
 Vary: Accept
 ```
 
-Inline-context responses omit the context `Link` relation:
+Inline-context responses omit the context `Link` relation. Jelly responses also
+have no context `Link` relation:
 
 ```http
-Content-Type: application/x-ndjson
+Content-Type: application/x-jelly-rdf
 Cache-Control: no-store
 Vary: Accept
 ```
@@ -174,6 +190,7 @@ serves `packages/client/dist`, with API rewrites to `api/*`.
 │   │       ├── cbor.ts
 │   │       ├── cborld.ts
 │   │       ├── context.ts
+│   │       ├── jelly.ts
 │   │       ├── ndjson.ts
 │   │       ├── negotiation.ts
 │   │       ├── notifications.ts
@@ -182,6 +199,7 @@ serves `packages/client/dist`, with API rewrites to `api/*`.
 │       ├── src/
 │       │   ├── api.ts
 │       │   ├── components/
+│       │   │   ├── ContextToggle.tsx
 │       │   │   ├── HttpExchange.tsx
 │       │   │   ├── NotificationList.tsx
 │       │   │   ├── Statistics.tsx
@@ -190,6 +208,7 @@ serves `packages/client/dist`, with API rewrites to `api/*`.
 │       │   │   ├── cbor.ts
 │       │   │   ├── cborSequence.ts
 │       │   │   ├── cborld.ts
+│       │   │   ├── jelly.ts
 │       │   │   ├── ndjson.ts
 │       │   │   ├── readers.ts
 │       │   │   ├── session.ts
@@ -207,8 +226,9 @@ serves `packages/client/dist`, with API rewrites to `api/*`.
 
 ## Context and encoding modes
 
-The endpoint supports two context modes, controlled by the `context` query
-parameter:
+The endpoint supports two context modes for NDJSON and CBOR, controlled by the
+`context` query parameter. Jelly-RDF ignores this parameter and is always a
+binary RDF stream.
 
 | Mode | Query | Link context relation | NDJSON | CBOR Sequence |
 |---|---|---|---|---|
@@ -241,7 +261,7 @@ place the context is advertised.
 
 ### Inline-context mode (`context=inline`)
 
-Every notification in both representations includes the public URL array:
+Every notification in both NDJSON and CBOR representations includes the public URL array:
 
 ```json
 {
@@ -305,6 +325,78 @@ passes the exact item bytes to the mode-appropriate decoder: `cborg` for plain
 CBOR or `@digitalbazaar/cborld` for inline-context CBOR-LD. This works even when
 an item is split across arbitrary transport chunks.
 
+## Jelly-RDF streaming
+
+### Media type and framing
+
+The Jelly representation uses `application/x-jelly-rdf` (the media type
+recommended by the current Jelly-RDF specification) and the `.jelly` extension.
+
+An ordinary HTTP response body uses Jelly's **delimited variant**: a sequence of
+`RdfStreamFrame` Protobuf messages, each preceded by a Protobuf varint containing
+the message length in bytes. There are no newline delimiters, no enclosing array,
+and no gRPC message envelope. gRPC provides its own message framing; this demo
+uses HTTP/1.1 or HTTP/2 response-body streaming instead.
+
+The server writes one `RdfStreamFrame` per notification:
+
+- `rdfjs-jelly`'s delimited `Writer` is created once per response.
+- `addMessage(quads)` flushes exactly one frame.
+- The Writer immediately writes the length-prefixed frame to the response
+  `ReadableStream`.
+- The first frame contains the stream options and lookup entries; later frames
+  reuse the stream's lookup state.
+
+### Implementation version
+
+This repository uses `rdfjs-jelly` 0.1.6. That implementation:
+
+- reads Jelly protocol versions 1 and 2
+- writes Jelly protocol version 2 only (Jelly-RDF 1.1)
+- supports delimited output, lookup compression, namespaces, and RDF/JS quads
+
+The current Jelly-RDF specification in development is 1.2 (protocol version 3).
+`rdfjs-jelly` 0.1.6 does not yet write version 1.2 streams. The media type and
+delimited framing used here are the same; the stream's version tag identifies the
+protocol version. Upgrade `rdfjs-jelly` when version-1.2 writing support becomes
+available.
+
+### RDF mapping
+
+Each notification is mapped to a small deterministic RDF graph using RDF/JS
+quads:
+
+- `<notification> rdf:type lws:Notification`
+- `<notification> lws:storage <storage>`
+- `<notification> lws:activity <activity>` for each activity
+- `<activity> rdf:type as:Create|Update|Delete|Move`
+- `<activity> as:actor <actor>`
+- `<activity> as:object <object>`
+- `<object> rdf:type lws:DataResource|...`
+- `<activity> as:target <target>` / `as:origin <origin>` when present
+- `<activity> as:published "..."^^xsd:dateTime`
+
+The client decodes RDF/JS quads and reverses this mapping to recover the logical
+notification for the side-by-side display and equivalence checks. It does not
+query or expand RDF.
+
+### Incremental client decoding
+
+The client uses the browser `StreamParser` from `rdfjs-jelly/browser`:
+
+```ts
+const parser = new StreamParser({ messages: true });
+const decoded = response.body.pipeThrough(countedBytes).pipeThrough(parser);
+```
+
+`StreamParser` handles varint length prefixes and frames split across arbitrary
+transport reads. The reader groups emitted `MessageQuad` entries by
+`messageCounter`; each complete frame becomes one decoded notification. No
+assumption is made that HTTP chunks align with Jelly frames.
+
+The Jelly panel has no `@context` toggle. Its response has no JSON-LD context
+`Link` relation and does not depend on the NDJSON/CBOR context mode.
+
 ## Client statistics
 
 Each panel displays an illustrative HTTP request and response-header snippet
@@ -320,17 +412,23 @@ For each stream the client reports:
 - elapsed time
 - status: connecting, streaming, complete, cancelled, or error
 
-The comparison headline uses:
+The comparison headlines use NDJSON as the baseline:
 
 ```text
-100 × (NDJSON body bytes − CBOR body bytes) / NDJSON body bytes
+CBOR reduction:  100 × (NDJSON bytes − CBOR bytes) / NDJSON bytes
+Jelly reduction: 100 × (NDJSON bytes − Jelly bytes) / NDJSON bytes
 ```
 
 The context document, cached context data, and HTTP headers are not included.
-When inline mode is active, the inlined `@context` array is part of both response
-bodies and is counted. The client also matches notifications by top-level `id`,
-checks order, and deep-compares the logical payloads after removing any inlined
-`@context`. It never performs RDF processing.
+When inline mode is active for NDJSON/CBOR, the inlined `@context` array is part
+of those response bodies and is counted. The Jelly body is independent of the
+context toggle. The client matches notifications by top-level `id` across all
+three streams, checks order, and deep-compares the logical payloads after
+removing any inlined `@context`.
+
+Jelly frame byte sizes are not exposed by the incremental parser, so the
+per-message list shows “stream frame” for Jelly. Total body bytes, decoded message
+counts, and average bytes per message are exact.
 
 ### Sample measurement
 
@@ -342,7 +440,9 @@ With the default 8 fixtures, one run produced:
 |---|---:|---:|
 | NDJSON | 3,272 | 409.0 B |
 | Plain CBOR Sequence | 2,896 | 362.0 B |
-| Reduction | | **11.5%** |
+| Jelly-RDF | 3,193 | 399.1 B |
+| CBOR reduction | | **11.5%** |
+| Jelly reduction | | **2.4%** |
 
 **Inline-context mode**
 
@@ -350,14 +450,18 @@ With the default 8 fixtures, one run produced:
 |---|---:|---:|
 | NDJSON | 3,944 | 493.0 B |
 | CBOR-LD Sequence | 2,097 | 262.1 B |
-| Reduction | | **46.8%** |
+| Jelly-RDF | 3,193 | 399.1 B |
+| CBOR reduction | | **46.8%** |
+| Jelly reduction | | **19.0%** |
 
 These totals use the generated fixture file in this repository. The
 representations carry fixed-length UUIDs and six-character cuid2 segments, so
 rerunning the fixture generator does not change their size. The public context
-array is fixed and the payloads do not depend on the host name. Timing depends
-on machine and network; the first-item figure in particular is not a benchmark.
-Always measure the deployment being evaluated.
+array is fixed and the payloads do not depend on the host name. Jelly is
+independent of the context toggle, so its size is identical in both tables; its
+reduction percentage changes with the NDJSON baseline. Timing depends on machine
+and network; the first-item figure in particular is not a benchmark. Always
+measure the deployment being evaluated.
 
 ### Fixture generation
 
@@ -376,7 +480,7 @@ Regenerate the committed fixture file with:
 npm run generate:fixtures
 ```
 
-The generated JSON is committed so both representations observe the same
+The generated JSON is committed so all three representations observe the same
 sequence across concurrent requests and separate serverless instances. Re-run
 the generator only when you intentionally want new random identifiers.
 
@@ -393,7 +497,7 @@ the generator only when you intentionally want new random identifiers.
 | `npm run typecheck` | Type-check all TypeScript packages and API entry points |
 | `npm test` | Run server and client unit/integration tests |
 | `npm run smoke:adapters` | Invoke Cloudflare and Vercel adapters with Web Requests |
-| `npm run smoke:cloudflare` | Build, start `wrangler dev` in workerd, verify both streams |
+| `npm run smoke:cloudflare` | Build, start `wrangler dev` in workerd, verify all three streams |
 | `npm run smoke:vercel` | Start `vercel dev --local`, verify functions and client |
 | `npm run deploy:cloudflare` | Build client and run `wrangler deploy` |
 | `npm run deploy:vercel` | Build client and run `vercel deploy --prod` |
@@ -442,8 +546,12 @@ Configuration: [`wrangler.jsonc`](./wrangler.jsonc)
 - API paths run the Worker first: `/notifications`, `/health`, `/contexts/*`
 - Compatibility date: `2026-10-01`
 - No `nodejs_compat` flag is required; shared code uses Web-standard APIs.
-- `@digitalbazaar/cborld` and its transitive dependencies are bundled by
-  Wrangler and have been smoke-tested in workerd.
+- `@digitalbazaar/cborld`, `rdfjs-jelly`, and their transitive dependencies are
+  bundled by Wrangler and have been smoke-tested in workerd.
+- The Cloudflare adapter temporarily hides workerd's partial Node `Buffer`
+  shim while loading `rdfjs-jelly`. This makes protobufjs select its
+  `Uint8Array` writer instead of the workerd `BufferWriter`, whose
+  `utf8Write` fails on longer strings.
 
 Deploy:
 
@@ -465,7 +573,7 @@ npm run preview:cloudflare
 ```
 
 The smoke test builds the client, starts `wrangler dev` on port 8790, checks
-health, both negotiated streams, the context route, and static assets, then
+health, all three negotiated streams, the context route, and static assets, then
 tears down the process tree.
 
 ## Vercel deployment
@@ -532,7 +640,7 @@ npx vercel dev --local
 ```
 
 The smoke test starts `vercel dev --local` on port 3009, waits for the local
-Vercel Function runtime, checks health, both streams, context, and the Vite
+Vercel Function runtime, checks health, all three streams, context, and the Vite
 client, then stops the process tree. It requires no Vercel account because it
 uses local mode.
 
@@ -553,16 +661,18 @@ Coverage includes:
 - NDJSON one-object-per-line framing and byte counts
 - CBOR Sequence concatenation and exact item boundaries
 - Plain-CBOR and CBOR-LD encode/decode round-trips
-- Link-only and inline-context behavior for both representations
-- Logical equivalence and ordering across both representations
+- Jelly-RDF frame encoding, length-delimited framing, and RDF/JS decoding
+- Link-only and inline-context behavior for NDJSON and CBOR
+- Logical equivalence and ordering across all three representations
 - Public context URL array and cached-context resolution
 - Context Link parsing for display only
 - Conditional Link context relation: included in link-only mode, omitted inline
 - Generated fixture shape: UUID URNs, actor hosts, and flat six-character cuid2
   paths
-- Chunk-boundary robustness: NDJSON, plain CBOR, and CBOR-LD items fed one byte
-  at a time
-- Incremental plain-CBOR and CBOR-LD decoding through the client reader
+- Chunk-boundary robustness: NDJSON, plain CBOR, CBOR-LD, and Jelly frames fed
+  one byte at a time
+- Incremental plain-CBOR, CBOR-LD, and Jelly-RDF decoding through the client
+  readers
 - Size-reduction and average-byte calculations
 - Client reader cancellation with `AbortController`
 - Server stream cancellation on request abort
@@ -573,9 +683,17 @@ Coverage includes:
 
 - The fixtures are synthetic and committed; no external storage or auth is
   involved. This is a benchmark/demo, not a production LWS notification service.
+- Jelly-RDF uses `application/x-jelly-rdf` and the delimited Protobuf variant:
+  each `RdfStreamFrame` is prefixed by its varint byte length. No newline or
+  gRPC envelope is added. `rdfjs-jelly` 0.1.6 writes protocol version 2
+  (Jelly-RDF 1.1); version 1.2 writing is not yet available in that JS
+  implementation.
+- Jelly has no `@context` toggle and no JSON-LD context `Link` relation. Its RDF
+  mapping is a simple deterministic projection of the notification envelope,
+  activity, object, and published fields.
 - The fixture generator uses `crypto.randomUUID()` for UUID URNs and
   `@paralleldrive/cuid2` with `length: 6` for flat storage paths. Generation is
-  a one-time authoring step; the committed JSON keeps both representations
+  a one-time authoring step; the committed JSON keeps all three representations
   identical across requests and serverless instances.
 - Actors use `https://{name}.id.example`. Objects, targets, and origins use flat
   `https://storage.example/{cuid2}` URLs.

@@ -60,5 +60,13 @@ describe('notification URLs', () => {
     expect(
       notificationsUrl({ count: 8, intervalMs: 250, inlineContext: true }),
     ).toBe('/notifications?count=8&interval=250&context=inline');
+    expect(
+      notificationsUrl({
+        count: 8,
+        intervalMs: 250,
+        inlineContext: true,
+        representation: 'jelly',
+      }),
+    ).toBe('/notifications?count=8&interval=250');
   });
 });

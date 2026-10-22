@@ -23,7 +23,8 @@
     "@digitalbazaar/cborld": "^8.1.0",
     "@hono/node-server": "^2.1.5",
     "cborg": "^6.1.4",
-    "hono": "^4.13.13"
+    "hono": "^4.13.13",
+    "rdfjs-jelly": "^0.1.6"
   },
   "devDependencies": {
     "@paralleldrive/cuid2": "^3.3.0",

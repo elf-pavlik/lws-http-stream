@@ -1,10 +1,11 @@
-export const REPRESENTATIONS = ['ndjson', 'cbor-seq'] as const;
+export const REPRESENTATIONS = ['ndjson', 'cbor-seq', 'jelly'] as const;
 
 export type Representation = (typeof REPRESENTATIONS)[number];
 
 export const MEDIA_TYPES: Readonly<Record<Representation, string>> = {
   ndjson: 'application/x-ndjson',
   'cbor-seq': 'application/cbor-seq',
+  jelly: 'application/x-jelly-rdf',
 };
 
 export const DEFAULT_REPRESENTATION: Representation = 'ndjson';
@@ -29,10 +30,11 @@ interface MediaTypeParts {
 const SUPPORTED_TYPES: Readonly<Record<Representation, MediaTypeParts>> = {
   ndjson: { type: 'application', subtype: 'x-ndjson' },
   'cbor-seq': { type: 'application', subtype: 'cbor-seq' },
+  jelly: { type: 'application', subtype: 'x-jelly-rdf' },
 };
 
 /**
- * Negotiate one of the two representations supported by the demo.
+ * Negotiate one of the three representations supported by the demo.
  *
  * A missing or empty Accept header selects NDJSON. Wildcards are accepted and
  * prefer NDJSON when both representations have the same quality. An explicit
