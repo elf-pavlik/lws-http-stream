@@ -32,6 +32,15 @@ The server is shared TypeScript using Web-standard `Request`, `Response`,
 type stripping, and is deployed through thin Cloudflare Worker and Vercel
 Function adapters.
 
+## References
+
+- [Linked Web Storage (LWS) Protocol](https://w3c.github.io/lws-protocol/lws10-core/)
+- [JSON-LD 1.1](https://www.w3.org/TR/json-ld11/)
+- [CBOR-LD](https://w3c.github.io/cbor-ld/)
+- [NDJSON Specification](https://github.com/ndjson/ndjson-spec)
+- [RFC 8742 — Concise Binary Object Representation (CBOR) Sequences](https://www.rfc-editor.org/rfc/rfc8742)
+- [Jelly-RDF — Delimited Variant of Jelly Serialization](https://jelly-rdf.github.io/dev/specification/serialization/#delimited-variant-of-jelly)
+
 ## Requirements
 
 - Node.js **24** (native TypeScript type stripping is required)
