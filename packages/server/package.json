@@ -15,6 +15,7 @@
   "scripts": {
     "dev": "node --watch adapters/node.ts",
     "start": "node adapters/node.ts",
+    "generate:fixtures": "node scripts/generate-fixtures.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run"
   },
@@ -25,6 +26,7 @@
     "hono": "^4.13.13"
   },
   "devDependencies": {
+    "@paralleldrive/cuid2": "^3.3.0",
     "@types/node": "^24.19.2",
     "typescript": "^5.9.3",
     "vitest": "^5.0.5"

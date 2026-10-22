@@ -1,11 +1,11 @@
 import { Hono } from 'hono';
 import type { Context } from 'hono';
+import { CBORLD_REGISTRY_ENTRY_ID } from './cborld.ts';
 import {
-  CBORLD_REGISTRY_ENTRY_ID,
   LWS_CONTEXT_DOCUMENT,
   LWS_CONTEXT_PATH,
   contextUrlFor,
-} from './cborld.ts';
+} from './context.ts';
 import { selectNotifications } from './notifications.ts';
 import {
   DEFAULT_REPRESENTATION,
@@ -27,6 +27,8 @@ export const MAX_COUNT = 100;
 export const MAX_INTERVAL_MS = 5_000;
 
 const JSON_LD_CONTEXT_REL = 'http://www.w3.org/ns/json-ld#context';
+const CONTEXT_MODES = ['link', 'inline'] as const;
+const DEFAULT_CONTEXT_MODE = 'link';
 
 export function createApp(options: AppOptions = {}): Hono {
   const defaultCount = options.defaultCount ?? DEFAULT_COUNT;
@@ -41,6 +43,8 @@ export function createApp(options: AppOptions = {}): Hono {
         representations: REPRESENTATIONS,
         mediaTypes: REPRESENTATIONS.map(representation => MEDIA_TYPES[representation]),
         defaultRepresentation: DEFAULT_REPRESENTATION,
+        contextModes: CONTEXT_MODES,
+        defaultContextMode: DEFAULT_CONTEXT_MODE,
         cborldRegistryEntryId: CBORLD_REGISTRY_ENTRY_ID,
       },
       200,
@@ -99,34 +103,40 @@ export function createApp(options: AppOptions = {}): Hono {
       return invalidQuery(c, 'interval', 0, MAX_INTERVAL_MS);
     }
 
+    const contextMode = c.req.query('context') ?? DEFAULT_CONTEXT_MODE;
+    if (contextMode !== 'link' && contextMode !== 'inline') {
+      return invalidContextMode(c);
+    }
+
     const notifications = selectNotifications(count);
-    const contextUrl = contextUrlFor(c.req.url);
-    const link = `<${contextUrl}>; rel="${JSON_LD_CONTEXT_REL}"; type="application/ld+json"`;
 
     const body = createNotificationStream({
       notifications,
       representation: negotiation.representation,
-      contextUrl,
+      inlineContext: contextMode === 'inline',
       intervalMs,
       signal: c.req.raw.signal,
       onChunk: options.onChunk,
     });
 
+    const headers: Record<string, string> = {
+      'Content-Type': negotiation.mediaType,
+      'Cache-Control': 'no-store',
+      Vary: 'Accept',
+      'X-Content-Type-Options': 'nosniff',
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Expose-Headers': 'Link',
+    };
+
+    if (contextMode === 'link') {
+      headers.Link =
+        `<${contextUrlFor(c.req.url)}>; rel="${JSON_LD_CONTEXT_REL}"; ` +
+        'type="application/ld+json"';
+    }
+
     return new Response(body, {
       status: 200,
-      headers: {
-        'Content-Type': negotiation.mediaType,
-        Link: link,
-        'Cache-Control': 'no-store',
-        Vary: 'Accept',
-        'X-Content-Type-Options': 'nosniff',
-        'X-Context-Url': contextUrl,
-        'X-Notification-Count': String(count),
-        'X-Notification-Interval-Ms': String(intervalMs),
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Expose-Headers':
-          'Link, X-Context-Url, X-Notification-Count, X-Notification-Interval-Ms',
-      },
+      headers,
     });
   });
 
@@ -179,6 +189,22 @@ function parseIntegerParameter(
     return null;
   }
   return value;
+}
+
+function invalidContextMode(c: Context): Response {
+  return c.json(
+    {
+      error: 'invalid_query',
+      parameter: 'context',
+      message: '"context" must be "link" or "inline".',
+      allowed: CONTEXT_MODES,
+    },
+    400,
+    {
+      'Cache-Control': 'no-store',
+      'Access-Control-Allow-Origin': '*',
+    },
+  );
 }
 
 function invalidQuery(

@@ -1,9 +1,7 @@
 import { createSignal, onCleanup, onMount } from 'solid-js';
-import {
-  createContextDocumentLoader,
-  parseContextLink,
-  requestNotificationStream,
-} from '../api.ts';
+import { parseContextLink, requestNotificationStream } from '../api.ts';
+import { decodePlainCborItem } from './cbor.ts';
+import { decodeCborLdItem } from './cborld.ts';
 import { readCborSequenceStream, readNdjsonStream } from './readers.ts';
 import { initialStats } from './stats.ts';
 import type { ReceivedNotification, Representation, StreamStats } from './types.ts';
@@ -11,6 +9,7 @@ import type { ReceivedNotification, Representation, StreamStats } from './types.
 export interface SessionOptions {
   count: number;
   intervalMs: number;
+  inlineContext: boolean;
 }
 
 export interface StreamSession {
@@ -93,6 +92,7 @@ export function createStreamSession(
         const response = await requestNotificationStream(representation, {
           count: options.count,
           intervalMs: options.intervalMs,
+          inlineContext: options.inlineContext,
           signal: controller.signal,
         });
 
@@ -100,12 +100,6 @@ export function createStreamSession(
           response.headers.get('Link'),
           response.url || window.location.href,
         );
-        if (contextUrl === null) {
-          throw new Error(
-            `The ${representation} response did not include a JSON-LD context Link header.`,
-          );
-        }
-
         if (generation !== state.generation) {
           return;
         }
@@ -154,8 +148,8 @@ export function createStreamSession(
         };
 
         if (representation === 'cbor-seq') {
-          const documentLoader = createContextDocumentLoader(contextUrl);
-          await readCborSequenceStream(response, documentLoader, callbacks, controller.signal);
+          const decodeItem = options.inlineContext ? decodeCborLdItem : decodePlainCborItem;
+          await readCborSequenceStream(response, decodeItem, callbacks, controller.signal);
         } else {
           await readNdjsonStream(response, callbacks, controller.signal);
         }

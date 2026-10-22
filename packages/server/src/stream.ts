@@ -1,4 +1,6 @@
-import { createContextDocumentLoader, encodeCborLdNotification } from './cborld.ts';
+import { encodePlainCborNotification } from './cbor.ts';
+import { encodeCborLdNotification } from './cborld.ts';
+import { withInlineContext } from './context.ts';
 import type { LwsNotification } from './notifications.ts';
 import { encodeNdjsonNotification } from './ndjson.ts';
 import type { Representation } from './negotiation.ts';
@@ -12,7 +14,7 @@ export interface ChunkEvent {
 export interface NotificationStreamOptions {
   notifications: readonly LwsNotification[];
   representation: Representation;
-  contextUrl: string;
+  inlineContext: boolean;
   intervalMs: number;
   signal?: AbortSignal;
   onChunk?: (event: ChunkEvent) => void;
@@ -26,7 +28,7 @@ export interface NotificationStreamOptions {
 export function createNotificationStream(
   options: NotificationStreamOptions,
 ): ReadableStream<Uint8Array> {
-  const { notifications, representation, contextUrl, intervalMs, signal, onChunk } = options;
+  const { notifications, representation, inlineContext, intervalMs, signal, onChunk } = options;
 
   let cancelled = signal?.aborted ?? false;
   let consumerCancelled = false;
@@ -76,9 +78,6 @@ export function createNotificationStream(
 
   return new ReadableStream<Uint8Array>({
     async start(controller) {
-      const documentLoader =
-        representation === 'cbor-seq' ? createContextDocumentLoader(contextUrl) : undefined;
-
       try {
         for (let index = 0; index < notifications.length; index += 1) {
           if (cancelled) {
@@ -96,8 +95,12 @@ export function createNotificationStream(
           const notification = notifications[index]!;
           const bytes =
             representation === 'ndjson'
-              ? encodeNdjsonNotification(notification)
-              : await encodeCborLdNotification(notification, contextUrl, documentLoader);
+              ? encodeNdjsonNotification(
+                  inlineContext ? withInlineContext(notification) : notification,
+                )
+              : inlineContext
+                ? await encodeCborLdNotification(notification)
+                : encodePlainCborNotification(notification);
 
           if (cancelled) {
             break;

@@ -1,4 +1,6 @@
 import { Show } from 'solid-js';
+import { ContextToggle } from './ContextToggle.tsx';
+import { HttpExchange } from './HttpExchange.tsx';
 import { NotificationList } from './NotificationList.tsx';
 import { Statistics } from './Statistics.tsx';
 import type { StreamSession } from '../lib/session.ts';
@@ -9,6 +11,8 @@ export function StreamPanel(props: {
   session: StreamSession;
   counterpartIds: Set<string>;
   tone: 'ndjson' | 'cbor';
+  inlineContext: boolean;
+  onToggleContext: () => void;
 }) {
   return (
     <section class={`panel panel-${props.tone}`}>
@@ -17,10 +21,21 @@ export function StreamPanel(props: {
           <h2>{props.title}</h2>
           <code class="media-type">{props.mediaType}</code>
         </div>
-        <span class="encoding-badge">{props.tone === 'ndjson' ? 'text' : 'binary'}</span>
+        <div class="panel-actions">
+          <ContextToggle
+            checked={props.inlineContext}
+            onToggle={props.onToggleContext}
+          />
+          <span class="encoding-badge">{props.tone === 'ndjson' ? 'text' : 'binary'}</span>
+        </div>
       </header>
 
       <Statistics stats={props.session.stats()} />
+
+      <HttpExchange
+        representation={props.session.representation}
+        inlineContext={props.inlineContext}
+      />
 
       <NotificationList
         items={props.session.items()}

@@ -45,13 +45,13 @@ export function normalizeNotificationDocument(
   const { '@context': _context, ...logical } = document;
   const candidate = logical as Partial<LwsNotification>;
   if (typeof candidate.id !== 'string' || candidate.id.length === 0) {
-    throw new Error('Decoded CBOR-LD notification has no string id.');
+    throw new Error('Decoded CBOR notification has no string id.');
   }
   if (candidate.type !== 'Notification') {
-    throw new Error('Decoded CBOR-LD document is not an LWS Notification.');
+    throw new Error('Decoded CBOR document is not an LWS Notification.');
   }
   if (typeof candidate.storage !== 'string' || candidate.activity === undefined) {
-    throw new Error('Decoded CBOR-LD notification is missing envelope properties.');
+    throw new Error('Decoded CBOR notification is missing envelope properties.');
   }
   return candidate as LwsNotification;
 }

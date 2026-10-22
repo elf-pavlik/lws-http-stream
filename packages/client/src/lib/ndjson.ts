@@ -61,7 +61,8 @@ function normalizeNdjsonDocument(value: unknown): LwsNotification {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
     throw new Error('NDJSON line did not contain a JSON object.');
   }
-  const candidate = value as Partial<LwsNotification>;
+  const { '@context': _context, ...logical } = value as Record<string, unknown>;
+  const candidate = logical as Partial<LwsNotification>;
   if (typeof candidate.id !== 'string' || candidate.id.length === 0) {
     throw new Error('NDJSON notification has no string id.');
   }

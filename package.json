@@ -16,6 +16,7 @@
     "dev": "concurrently -k -n server,client -c cyan,magenta \"npm run dev:server\" \"npm run dev:client\"",
     "dev:server": "npm run dev -w @lws-stream/server",
     "dev:client": "npm run dev -w @lws-stream/client",
+    "generate:fixtures": "npm run generate:fixtures -w @lws-stream/server",
     "build:client": "npm run build -w @lws-stream/client",
     "build": "npm run build:client && npm run typecheck",
     "typecheck": "tsc -p tsconfig.json && npm run typecheck -w @lws-stream/server && npm run typecheck -w @lws-stream/client",

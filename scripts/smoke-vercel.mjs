@@ -124,17 +124,32 @@ async function checkStreams() {
   assert.equal(cbor.headers.get('content-type'), 'application/cbor-seq');
   const cborBytes = new Uint8Array(await cbor.arrayBuffer());
   assert.ok(cborBytes.byteLength > 10);
-  assert.deepEqual(Array.from(cborBytes.subarray(0, 3)), [0xd9, 0xcb, 0x1d]);
+  assert.notDeepEqual(Array.from(cborBytes.subarray(0, 3)), [0xd9, 0xcb, 0x1d]);
+
+  const [inlineNdjson, inlineCbor] = await Promise.all([
+    fetch(`${origin}/notifications?count=2&interval=0&context=inline`, {
+      headers: { Accept: 'application/x-ndjson' },
+    }),
+    fetch(`${origin}/notifications?count=2&interval=0&context=inline`, {
+      headers: { Accept: 'application/cbor-seq' },
+    }),
+  ]);
+  assert.match(await inlineNdjson.text(), /"@context"/);
+  assert.equal(inlineNdjson.headers.get('link'), null);
+  const inlineCborBytes = new Uint8Array(await inlineCbor.arrayBuffer());
+  assert.deepEqual(Array.from(inlineCborBytes.subarray(0, 3)), [0xd9, 0xcb, 0x1d]);
+  assert.equal(inlineCbor.headers.get('link'), null);
 
   assert.ok(ndjson.headers.get('link'));
   assert.equal(ndjson.headers.get('link'), cbor.headers.get('link'));
   console.log(
-    `Vercel streams: ${ndjsonBytes.byteLength} NDJSON bytes, ${cborBytes.byteLength} CBOR bytes`,
+    `Vercel streams: ${ndjsonBytes.byteLength} NDJSON bytes, ` +
+      `${cborBytes.byteLength} plain CBOR bytes, ${inlineCborBytes.byteLength} inline CBOR-LD bytes`,
   );
 }
 
 async function checkContext() {
-  const response = await fetch(`${origin}/contexts/lws-v1.jsonld`);
+  const response = await fetch(`${origin}/contexts/lws-notifications-v1.jsonld`);
   assert.equal(response.status, 200);
   const document = await response.json();
   assert.ok(document['@context']);

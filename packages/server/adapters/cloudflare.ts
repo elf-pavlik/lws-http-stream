@@ -1,5 +1,5 @@
 import { app } from '../src/app.ts';
-import { LWS_CONTEXT_PATH } from '../src/cborld.ts';
+import { LWS_CONTEXT_PATH } from '../src/context.ts';
 
 interface AssetsBinding {
   fetch(request: Request): Promise<Response>;

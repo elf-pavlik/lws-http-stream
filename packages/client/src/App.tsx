@@ -8,20 +8,24 @@ import {
   sizeReduction,
 } from './lib/stats.ts';
 
-const INITIAL_COUNT = 8;
-const INITIAL_INTERVAL_MS = 250;
+const INITIAL_COUNT = 50;
+const INITIAL_INTERVAL_MS = 500;
 
 export default function App() {
   const [count, setCount] = createSignal(INITIAL_COUNT);
   const [intervalMs, setIntervalMs] = createSignal(INITIAL_INTERVAL_MS);
+  const [ndjsonInlineContext, setNdjsonInlineContext] = createSignal(false);
+  const [cborInlineContext, setCborInlineContext] = createSignal(false);
 
   const ndjson = createStreamSession('ndjson', {
     count: INITIAL_COUNT,
     intervalMs: INITIAL_INTERVAL_MS,
+    inlineContext: false,
   });
   const cbor = createStreamSession('cbor-seq', {
     count: INITIAL_COUNT,
     intervalMs: INITIAL_INTERVAL_MS,
+    inlineContext: false,
   });
 
   const ndjsonIds = createMemo(() => new Set(ndjson.items().map(item => item.id)));
@@ -69,8 +73,39 @@ export default function App() {
     const nextInterval = clamp(Math.round(intervalMs()), 0, 5000);
     setCount(nextCount);
     setIntervalMs(nextInterval);
-    ndjson.start({ count: nextCount, intervalMs: nextInterval });
-    cbor.start({ count: nextCount, intervalMs: nextInterval });
+    ndjson.start({
+      count: nextCount,
+      intervalMs: nextInterval,
+      inlineContext: ndjsonInlineContext(),
+    });
+    cbor.start({
+      count: nextCount,
+      intervalMs: nextInterval,
+      inlineContext: cborInlineContext(),
+    });
+  };
+
+  const restartOne = (
+    session: ReturnType<typeof createStreamSession>,
+    inlineContext: boolean,
+  ): void => {
+    const nextCount = clamp(Math.round(count()), 1, 100);
+    const nextInterval = clamp(Math.round(intervalMs()), 0, 5000);
+    setCount(nextCount);
+    setIntervalMs(nextInterval);
+    session.start({ count: nextCount, intervalMs: nextInterval, inlineContext });
+  };
+
+  const toggleNdjsonContext = (): void => {
+    const next = !ndjsonInlineContext();
+    setNdjsonInlineContext(next);
+    restartOne(ndjson, next);
+  };
+
+  const toggleCborContext = (): void => {
+    const next = !cborInlineContext();
+    setCborInlineContext(next);
+    restartOne(cbor, next);
   };
 
   const stopBoth = (): void => {
@@ -83,22 +118,14 @@ export default function App() {
       <header class="hero">
         <div class="eyebrow">Linked Web Storage · streaming notifications</div>
         <h1>
-          NDJSON-LD <span>vs.</span> CBOR-LD
+          NDJSON <span>vs.</span> CBOR
         </h1>
         <p class="lede">
           Two concurrent HTTP streams carry the same ordered LWS notifications. The left stream
-          is compact NDJSON; the right stream is an RFC 8742 CBOR Sequence of CBOR-LD items.
-          Every byte shown below comes from the actual response bodies.
+          is compact NDJSON; the right stream is an RFC 8742 CBOR Sequence. With @context off the
+          CBOR items are plain CBOR; with @context on they are compressed CBOR-LD. Every byte
+          shown below comes from the actual response bodies.
         </p>
-        <div class="hero-meta">
-          <span>
-            <code>Accept: application/x-ndjson</code>
-          </span>
-          <span>
-            <code>Accept: application/cbor-seq</code>
-          </span>
-          <span>shared JSON-LD context via HTTP Link</span>
-        </div>
       </header>
 
       <section class="controls" aria-label="Stream controls">
@@ -132,22 +159,23 @@ export default function App() {
           </button>
         </form>
         <p class="hint">
-          Default: 8 deterministic notifications, 250 ms apart. Use 40+ notifications and a
-          longer interval to exercise streaming and cancellation.
+          Each panel has its own @context toggle and re-runs that stream immediately. Off: the
+          context is only in the Link header. On: the context URL array is inlined into every
+          notification. Use a longer interval to exercise streaming and cancellation.
         </p>
       </section>
 
       <section class="summary" aria-label="Comparison summary">
         <div class="summary-card summary-reduction">
-          <span>CBOR-LD size reduction</span>
+          <span>CBOR size reduction</span>
           <strong>{formatPercent(reduction())}</strong>
-          <small>live; final when both streams complete</small>
+          <small>plain CBOR or CBOR-LD, depending on the @context toggle</small>
         </div>
         <div class="summary-card">
           <span>Matched IDs</span>
           <strong>{matchedIds().size}</strong>
           <small>
-            {ndjson.items().length} NDJSON · {cbor.items().length} CBOR-LD
+            {ndjson.items().length} NDJSON · {cbor.items().length} CBOR
           </small>
         </div>
         <div class="summary-card">
@@ -155,7 +183,7 @@ export default function App() {
           <strong>
             {identicalCount()}/{matchedIds().size}
           </strong>
-          <small>after removing the CBOR-LD encoding @context</small>
+          <small>after removing any inlined @context</small>
         </div>
         <div class="summary-card">
           <span>Same order</span>
@@ -180,18 +208,22 @@ export default function App() {
 
       <div class="panels">
         <StreamPanel
-          title="NDJSON-LD"
+          title="NDJSON"
           mediaType="application/x-ndjson"
           session={ndjson}
           counterpartIds={cborIds()}
           tone="ndjson"
+          inlineContext={ndjsonInlineContext()}
+          onToggleContext={toggleNdjsonContext}
         />
         <StreamPanel
-          title="CBOR-LD Sequence"
+          title="CBOR Sequence"
           mediaType="application/cbor-seq"
           session={cbor}
           counterpartIds={ndjsonIds()}
           tone="cbor"
+          inlineContext={cborInlineContext()}
+          onToggleContext={toggleCborContext}
         />
       </div>
 
@@ -199,17 +231,19 @@ export default function App() {
         <h2>How the numbers are produced</h2>
         <p>
           Each stream is read independently with a streaming reader. NDJSON is split on LF bytes;
-          CBOR-LD items are framed incrementally according to RFC 8742, including when a CBOR item
-          spans transport chunks. Size reduction is{' '}
+          CBOR items are framed incrementally according to RFC 8742, including when an item spans
+          transport chunks. Off mode uses plain CBOR and link-only context; on mode inlines the
+          context and uses CBOR-LD compression. Size reduction is{' '}
           <code>100 × (NDJSON bytes − CBOR bytes) / NDJSON bytes</code>, using response-body bytes
-          only. HTTP headers, the context document, and compression are excluded.
+          only. HTTP headers, the context document, and transport compression are excluded.
         </p>
         <ul>
           <For
             each={[
-              'Deterministic fixtures keep both requests byte-comparable.',
+              'Committed generated fixtures keep both requests byte-comparable.',
               'The first chunk is flushed immediately; later chunks are spaced by the interval.',
               'Cancelling a stream aborts the fetch and stops the server-side producer.',
+              'The client treats every decoded item as plain JSON and never performs RDF processing.',
             ]}
           >
             {point => <li>{point}</li>}

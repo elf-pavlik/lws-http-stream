@@ -11,6 +11,7 @@
     "src/**/*.ts",
     "src/**/*.d.ts",
     "adapters/**/*.ts",
+    "scripts/**/*.ts",
     "test/**/*.ts",
     "vitest.config.ts"
   ]

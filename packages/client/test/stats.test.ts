@@ -66,7 +66,7 @@ describe('size statistics', () => {
 
   it('removes only the CBOR-LD encoding context', () => {
     const normalized = normalizeNotificationDocument({
-      '@context': 'https://demo.example/contexts/lws-v1.jsonld',
+      '@context': 'https://demo.example/contexts/lws-notifications-v1.jsonld',
       ...notification,
     });
     expect(normalized).toEqual(notification);

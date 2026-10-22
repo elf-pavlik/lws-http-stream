@@ -24,14 +24,14 @@ describe('Cloudflare Worker adapter', () => {
     expect(response.status).toBe(200);
     expect(response.headers.get('content-type')).toBe('application/x-ndjson');
     expect(response.headers.get('link')).toContain(
-      '<https://demo.example/contexts/lws-v1.jsonld>',
+      '<https://demo.example/contexts/lws-notifications-v1.jsonld>',
     );
     expect((await response.text()).trimEnd().split('\n')).toHaveLength(2);
   });
 
   it('serves the context through the Worker', async () => {
     const response = await worker.fetch(
-      new Request('https://demo.example/contexts/lws-v1.jsonld'),
+      new Request('https://demo.example/contexts/lws-notifications-v1.jsonld'),
       {
         ASSETS: {
           async fetch() {
@@ -74,7 +74,7 @@ describe('Vercel function adapter', () => {
     expect(response.status).toBe(200);
     expect(response.headers.get('content-type')).toBe('application/cbor-seq');
     expect(response.headers.get('link')).toContain(
-      '<https://demo.example/contexts/lws-v1.jsonld>',
+      '<https://demo.example/contexts/lws-notifications-v1.jsonld>',
     );
     expect((await response.arrayBuffer()).byteLength).toBeGreaterThan(20);
   });

@@ -73,6 +73,27 @@ describe('incremental NDJSON decoding', () => {
     expect(() => decoder.finish()).toThrow(/incomplete byte/i);
   });
 
+  it('strips an inlined @context and treats the line as plain JSON', () => {
+    const document = {
+      '@context': { Notification: 'https://www.w3.org/ns/lws#Notification' },
+      id: 'one',
+      type: 'Notification',
+      storage: 'https://storage.example/',
+      activity: {
+        id: 'urn:uuid:one',
+        type: ['Create'],
+        object: { id: 'https://storage.example/one', type: ['DataResource'] },
+        published: '2026-03-26T10:30:00Z',
+      },
+    };
+    const decoder = new NdjsonDecoder();
+    const [message] = decoder.push(encoder.encode(`${JSON.stringify(document)}\n`));
+    decoder.finish();
+
+    expect(message!.notification).not.toHaveProperty('@context');
+    expect(message!.notification.id).toBe('one');
+  });
+
   it('rejects empty lines and malformed JSON', () => {
     const decoder = new NdjsonDecoder();
     expect(() => decoder.push(encoder.encode('\n'))).toThrow(/empty NDJSON line/i);

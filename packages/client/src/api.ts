@@ -1,4 +1,3 @@
-import type { DocumentLoader } from '@digitalbazaar/cborld';
 import type { Representation } from './lib/types.ts';
 
 export const MEDIA_TYPES: Readonly<Record<Representation, string>> = {
@@ -7,20 +6,23 @@ export const MEDIA_TYPES: Readonly<Record<Representation, string>> = {
 };
 
 const JSON_LD_CONTEXT_REL = 'http://www.w3.org/ns/json-ld#context';
-const CONTEXT_PATH_SUFFIX = '/contexts/lws-v1.jsonld';
-
-const contextCache = new Map<string, Promise<Record<string, unknown>>>();
 
 export interface StreamRequestOptions {
   count: number;
   intervalMs: number;
+  inlineContext: boolean;
   signal: AbortSignal;
 }
 
-export function notificationsUrl(options: { count: number; intervalMs: number }): string {
+export function notificationsUrl(options: {
+  count: number;
+  intervalMs: number;
+  inlineContext: boolean;
+}): string {
   const params = new URLSearchParams({
     count: String(options.count),
     interval: String(options.intervalMs),
+    context: options.inlineContext ? 'inline' : 'link',
   });
   return `/notifications?${params.toString()}`;
 }
@@ -52,8 +54,8 @@ export async function requestNotificationStream(
 
 /**
  * Parse the response-level JSON-LD context URL from the HTTP Link header.
- * The demo uses this URL for both representations and requires exactly one
- * context link.
+ * The URL is displayed for orientation only. The client never fetches or
+ * resolves it and never performs RDF processing.
  */
 export function parseContextLink(header: string | null, baseUrl: string): string | null {
   if (header === null || header.trim() === '') {
@@ -87,70 +89,6 @@ export function parseContextLink(header: string | null, baseUrl: string): string
     throw new Error('Response contains more than one JSON-LD context Link target.');
   }
   return unique[0] ?? null;
-}
-
-export function createContextDocumentLoader(linkContextUrl: string): DocumentLoader {
-  return async url => {
-    let requested: URL;
-    let linked: URL;
-    try {
-      requested = new URL(url);
-      linked = new URL(linkContextUrl);
-    } catch {
-      throw new Error(`Invalid JSON-LD context URL: ${url}`);
-    }
-
-    const isSameContext =
-      requested.href === linked.href ||
-      (requested.pathname === linked.pathname && requested.pathname.endsWith(CONTEXT_PATH_SUFFIX));
-
-    if (!isSameContext) {
-      throw new Error(
-        `CBOR-LD item referenced context ${url}, which does not match the Link context ${linkContextUrl}.`,
-      );
-    }
-
-    const document = await loadContextDocument(linkContextUrl);
-    return {
-      document,
-      documentUrl: linkContextUrl,
-    };
-  };
-}
-
-async function loadContextDocument(url: string): Promise<Record<string, unknown>> {
-  const cached = contextCache.get(url);
-  if (cached) {
-    return cached;
-  }
-
-  const promise = (async () => {
-    const response = await fetch(url, {
-      headers: {
-        Accept: 'application/ld+json, application/json;q=0.9',
-      },
-      cache: 'no-store',
-      credentials: 'same-origin',
-    });
-    if (!response.ok) {
-      throw new Error(`Failed to load JSON-LD context ${url}: HTTP ${response.status}`);
-    }
-    const document = (await response.json()) as unknown;
-    if (
-      typeof document !== 'object' ||
-      document === null ||
-      !('@context' in document)
-    ) {
-      throw new Error(`JSON-LD context response from ${url} is invalid.`);
-    }
-    return document as Record<string, unknown>;
-  })();
-
-  contextCache.set(url, promise);
-  promise.catch(() => {
-    contextCache.delete(url);
-  });
-  return promise;
 }
 
 function hasRel(parameters: string, expected: string): boolean {

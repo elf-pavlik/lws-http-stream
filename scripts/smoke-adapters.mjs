@@ -24,7 +24,7 @@ const workerResponse = await worker.fetch(
 );
 assert.equal(workerResponse.status, 200);
 assert.equal(workerResponse.headers.get('content-type'), 'application/x-ndjson');
-assert.match(workerResponse.headers.get('link') ?? '', /contexts\/lws-v1\.jsonld/);
+assert.match(workerResponse.headers.get('link') ?? '', /contexts\/lws-notifications-v1\.jsonld/);
 const workerBody = await workerResponse.text();
 assert.equal(workerBody.trimEnd().split('\n').length, 2);
 log(`  NDJSON body: ${new TextEncoder().encode(workerBody).byteLength} bytes`);
@@ -43,8 +43,19 @@ assert.equal(vercelResponse.status, 200);
 assert.equal(vercelResponse.headers.get('content-type'), 'application/cbor-seq');
 const cborBody = new Uint8Array(await vercelResponse.arrayBuffer());
 assert.ok(cborBody.byteLength > 10);
-assert.deepEqual(Array.from(cborBody.subarray(0, 3)), [0xd9, 0xcb, 0x1d]);
-log(`  CBOR Sequence body: ${cborBody.byteLength} bytes`);
+assert.notDeepEqual(Array.from(cborBody.subarray(0, 3)), [0xd9, 0xcb, 0x1d]);
+assert.ok(vercelResponse.headers.get('link'));
+log(`  plain CBOR body: ${cborBody.byteLength} bytes`);
+
+const inlineResponse = await notificationsEntry.fetch(
+  new Request(`${origin}/api/notifications?count=2&interval=0&context=inline`, {
+    headers: { Accept: 'application/cbor-seq' },
+  }),
+);
+const inlineBody = new Uint8Array(await inlineResponse.arrayBuffer());
+assert.deepEqual(Array.from(inlineBody.subarray(0, 3)), [0xd9, 0xcb, 0x1d]);
+assert.equal(inlineResponse.headers.get('link'), null);
+log(`  inline CBOR-LD body: ${inlineBody.byteLength} bytes`);
 
 const health = await healthEntry.fetch(new Request(`${origin}/api/health`));
 assert.equal(health.status, 200);

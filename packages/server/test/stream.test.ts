@@ -3,15 +3,13 @@ import { createApp } from '../src/app.ts';
 import { notificationFixtures } from '../src/notifications.ts';
 import { createNotificationStream } from '../src/stream.ts';
 
-const contextUrl = 'https://demo.example/contexts/lws-v1.jsonld';
-
 describe('notification stream production', () => {
   it('emits one chunk per notification with no interval', async () => {
     const chunks: Uint8Array[] = [];
     const stream = createNotificationStream({
       notifications: notificationFixtures.slice(0, 3),
       representation: 'ndjson',
-      contextUrl,
+      inlineContext: false,
       intervalMs: 0,
       onChunk: event => chunks.push(event.bytes),
     });
@@ -30,7 +28,7 @@ describe('notification stream production', () => {
     const stream = createNotificationStream({
       notifications: notificationFixtures.slice(0, 2),
       representation: 'ndjson',
-      contextUrl,
+      inlineContext: false,
       intervalMs: 0,
       signal: controller.signal,
     });

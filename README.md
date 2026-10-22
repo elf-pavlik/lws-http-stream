@@ -1,4 +1,4 @@
-# LWS notification streaming: NDJSON-LD vs CBOR-LD
+# LWS notification streaming: NDJSON vs CBOR Sequence
 
 >[!NOTE]
 > Generated with opencode-go/DeepSeek V4.1 Flash (max)
@@ -7,13 +7,15 @@ A small full-stack demonstration of streaming Linked Web Storage (LWS)
 notifications over HTTP, comparing two representations of the same ordered
 notification sequence:
 
-- **NDJSON-LD**: one compact JSON-LD document per line, `application/x-ndjson`.
-- **CBOR-LD**: concatenated CBOR-LD items forming an RFC 8742 CBOR Sequence,
-  `application/cbor-seq`.
+- **NDJSON**: one compact JSON document per line, `application/x-ndjson`.
+- **CBOR Sequence**: plain CBOR items in link-only mode, or compressed CBOR-LD
+  items when `@context` is inlined, `application/cbor-seq`.
 
-The SolidJS client opens both streams concurrently, decodes them incrementally,
+A UI toggle controls whether the context is only advertised in the HTTP `Link`
+header (default) or is also inlined into every notification. The SolidJS client
+opens both streams concurrently, decodes them incrementally as plain JSON,
 matches notifications by ID, and computes byte statistics from the actual
-response bodies.
+response bodies. It never performs RDF processing.
 
 The server is shared TypeScript using Web-standard `Request`, `Response`,
 `ReadableStream`, and `Uint8Array` APIs. It runs directly on Node.js with native
@@ -45,9 +47,37 @@ Vite proxies `/notifications`, `/health`, and `/contexts` to the Node server, so
 the browser makes same-origin streaming requests and does not need CORS in
 local development.
 
-The default is 8 deterministic notifications at 250 ms intervals. The client
-also accepts a count and interval; use a larger count and shorter interval to
-exercise streaming, or press **Stop both** to test cancellation.
+The server defaults to 8 generated notifications at 250 ms intervals. The
+client starts with a 50-notification, 500 ms stream so the page has time to
+demonstrate streaming. Each stream panel has its own `@context` toggle; toggling
+one immediately re-runs only that stream. Change the count/interval controls or
+press **Stop both** to test cancellation.
+
+### Get both representations with curl
+
+With `npm run dev` running, use the Vite proxy origin:
+
+```bash
+# NDJSON: response headers and body on stdout
+curl -i 'http://localhost:5173/notifications?count=3&interval=0' \
+  -H 'Accept: application/x-ndjson'
+
+# CBOR Sequence: save the body, print headers, inspect the first bytes
+curl -sS -D /tmp/cbor-seq.headers \
+  'http://localhost:5173/notifications?count=3&interval=0' \
+  -H 'Accept: application/cbor-seq' \
+  -o /tmp/cbor-seq.bin
+cat /tmp/cbor-seq.headers
+od -An -tx1 -N 48 /tmp/cbor-seq.bin
+
+# The response-level JSON-LD context advertised by Link
+curl -i 'http://localhost:5173/contexts/lws-notifications-v1.jsonld' \
+  -H 'Accept: application/ld+json'
+```
+
+Use `http://localhost:8787` instead of `:5173` to call the Node server directly.
+The CBOR output is binary, so writing it to a file and inspecting it with `od`
+avoids dumping binary data into the terminal.
 
 ## API
 
@@ -57,13 +87,14 @@ exercise streaming, or press **Stop both** to test cancellation.
 |---|---:|---:|---|
 | `count` | `8` | 1–100 | Number of notifications; fixtures repeat if needed |
 | `interval` | `250` | 0–5000 ms | Delay between notifications |
+| `context` | `link` | `link` or `inline` | Context only in Link, or inlined into every notification |
 
 Content negotiation:
 
 | `Accept` | Response |
 |---|---|
 | `application/x-ndjson` | NDJSON stream |
-| `application/cbor-seq` | RFC 8742 CBOR Sequence of CBOR-LD items |
+| `application/cbor-seq` | RFC 8742 CBOR Sequence (plain CBOR or CBOR-LD, depending on `context`) |
 | missing / empty | NDJSON (documented default) |
 | `*/*` or `application/*` | NDJSON unless quality values select CBOR |
 | unsupported only | `406 Not Acceptable` |
@@ -71,16 +102,21 @@ Content negotiation:
 Standard quality values and specificity are honored. An exact `q=0` excludes a
 representation. A malformed/unsupported `Accept` returns 406.
 
-Response headers for either representation:
+Link-only response headers:
 
 ```http
 Content-Type: application/x-ndjson
-Link: <https://host/contexts/lws-v1.jsonld>; rel="http://www.w3.org/ns/json-ld#context"; type="application/ld+json"
+Link: <https://host/contexts/lws-notifications-v1.jsonld>; rel="http://www.w3.org/ns/json-ld#context"; type="application/ld+json"
 Cache-Control: no-store
 Vary: Accept
-X-Context-Url: https://host/contexts/lws-v1.jsonld
-X-Notification-Count: 8
-X-Notification-Interval-Ms: 250
+```
+
+Inline-context responses omit the context `Link` relation:
+
+```http
+Content-Type: application/x-ndjson
+Cache-Control: no-store
+Vary: Accept
 ```
 
 The first notification is sent immediately; later notifications are separated
@@ -89,12 +125,23 @@ buffered body. Request abort and reader cancellation stop the producer.
 
 ### `GET /health`
 
-Returns service and representation metadata.
+Returns service, representation, and context-mode metadata.
 
-### `GET /contexts/lws-v1.jsonld`
+### `GET /contexts/lws-notifications-v1.jsonld`
 
-Serves the bundled JSON-LD context used by the demo. The URL is host-relative,
-so the same deployment logic works locally, on Cloudflare, and on Vercel.
+Serves only the two official context URLs:
+
+```json
+{
+  "@context": [
+    "https://www.w3.org/ns/lws/v1",
+    "https://www.w3.org/ns/activitystreams"
+  ]
+}
+```
+
+The URL is host-relative, so the same deployment logic works locally, on
+Cloudflare, and on Vercel.
 
 ### `GET /*` (deployments)
 
@@ -116,12 +163,17 @@ serves `packages/client/dist`, with API rewrites to `api/*`.
 │   │   │   ├── cloudflare.ts
 │   │   │   └── vercel.ts
 │   │   ├── fixtures/
-│   │   │   ├── notifications.json
-│   │   │   └── contexts/lws-v1.json
+│   │   │   ├── notifications.json      # generated and committed
+│   │   │   └── contexts/
+│   │   │       ├── lws-notifications-v1.json  # public URL array
+│   │   │       └── cached-context.json         # cborld resolver cache
+│   │   ├── scripts/generate-fixtures.ts
 │   │   └── src/
 │   │       ├── app.ts
 │   │       ├── cbor-sequence.ts
+│   │       ├── cbor.ts
 │   │       ├── cborld.ts
+│   │       ├── context.ts
 │   │       ├── ndjson.ts
 │   │       ├── negotiation.ts
 │   │       ├── notifications.ts
@@ -130,11 +182,14 @@ serves `packages/client/dist`, with API rewrites to `api/*`.
 │       ├── src/
 │       │   ├── api.ts
 │       │   ├── components/
+│       │   │   ├── HttpExchange.tsx
 │       │   │   ├── NotificationList.tsx
 │       │   │   ├── Statistics.tsx
 │       │   │   └── StreamPanel.tsx
 │       │   ├── lib/
+│       │   │   ├── cbor.ts
 │       │   │   ├── cborSequence.ts
+│       │   │   ├── cborld.ts
 │       │   │   ├── ndjson.ts
 │       │   │   ├── readers.ts
 │       │   │   ├── session.ts
@@ -150,28 +205,50 @@ serves `packages/client/dist`, with API rewrites to `api/*`.
 └── wrangler.jsonc
 ```
 
-## Encoding and context policy
+## Context and encoding modes
 
-### One response-level context for both media types
+The endpoint supports two context modes, controlled by the `context` query
+parameter:
 
-Both streams include the same HTTP `Link` relation:
+| Mode | Query | Link context relation | NDJSON | CBOR Sequence |
+|---|---|---|---|---|
+| Link-only (default) | `context=link` | included | no inlined `@context` | plain CBOR, no CBOR-LD tag, no `@context` |
+| Inline | `context=inline` | omitted | `@context` in every line | CBOR-LD with `@context` in every item |
+
+In link-only mode the response includes:
 
 ```text
-Link: <https://host/contexts/lws-v1.jsonld>;
+Link: <https://host/contexts/lws-notifications-v1.jsonld>;
       rel="http://www.w3.org/ns/json-ld#context";
       type="application/ld+json"
 ```
 
-NDJSON documents omit `@context`; the response-level Link is the context
-policy. The client requires this Link for both representations.
+The Link target is the public context URL document served by the app. cborld
+resolves those URLs through the cached context documents; no network fetch is
+performed. Inline-context responses omit this Link relation because the context
+URL array is already in every notification.
 
-The CBOR-LD encoder does **not** read the HTTP Link header. For each
-notification, the server materializes the context URL into the JSON-LD document
-handed to `@digitalbazaar/cborld`:
+### Link-only mode (`context=link`, default)
+
+The notification objects contain no `@context`. The Link header is the only
+place the context is advertised.
+
+- NDJSON lines are plain compact JSON.
+- CBOR items are produced by the plain-CBOR encoder in `src/cbor.ts` using
+  `cborg.encode(notification)`. They have no CBOR-LD tag and no context.
+- The client decodes the plain CBOR items with `cborg` and treats the result as
+  plain JSON. It parses the Link header for display only.
+
+### Inline-context mode (`context=inline`)
+
+Every notification in both representations includes the public URL array:
 
 ```json
 {
-  "@context": "https://host/contexts/lws-v1.jsonld",
+  "@context": [
+    "https://www.w3.org/ns/lws/v1",
+    "https://www.w3.org/ns/activitystreams"
+  ],
   "id": "urn:uuid:...",
   "type": "Notification",
   "storage": "https://storage.example/",
@@ -179,38 +256,29 @@ handed to `@digitalbazaar/cborld`:
 }
 ```
 
-A server-side document loader maps that URL to the bundled context document.
-The encoded CBOR-LD item therefore carries the context URL so it is
-self-contained.
-
-On the client, the decoder:
-
-1. Parses the context URL from the response `Link` header.
-2. Loads that context document and caches it per URL.
-3. Passes a `documentLoader` to `@digitalbazaar/cborld`.
-4. Verifies that any context URL embedded in a CBOR-LD item matches the Link
-   context (same URL or same `/contexts/lws-v1.jsonld` path).
-5. Removes the encoding-internal `@context` before displaying or comparing the
-   logical notification.
-
-The bundled context is a minimal demo context for the LWS notification
-envelope and ActivityStreams terms used by the fixtures. The official LWS
-context URL is not used because the LWS context document is still being
-finalized. The demo does not claim to implement a frozen LWS context; it
-demonstrates the response-level context mechanism consistently.
+- NDJSON lines include that `@context` array.
+- CBOR items are compressed with `@digitalbazaar/cborld`. The URL array alone is
+  not enough for cborld: the server supplies a document loader backed by
+  `cached-context.json`, keyed by the two official URLs. No network fetch occurs.
+- The client uses `cborld` only to decompress the item back to JSON. It does not
+  fetch, resolve, validate, or expand the public context, and it performs no RDF
+  processing. For decompression, the client bundles the same cached context
+  documents as opaque decoder data.
+- No context `Link` relation is sent in inline mode.
 
 ### CBOR-LD registry configuration
 
-The server uses `@digitalbazaar/cborld` with:
+Only inline-context mode uses `@digitalbazaar/cborld`, with:
 
 - `format: 'cbor-ld-1.0'` (default, tag `0xcb1d`)
 - `registryEntryId: 1` (the default registry, with compression enabled)
-- a document loader backed by the bundled LWS demo context
+- a document loader backed by `cached-context.json`
 
-Registry entry `1` has no preassigned application terms, so term compression is
-derived from the supplied context. The full context URL is carried in each
-item. A production deployment could register a custom context code and term
-table to reduce bytes further, at the cost of distributing registry metadata.
+The public `@context` array is carried inside each CBOR-LD item. cborld resolves
+the two URLs through the cached document loader to perform compression. Link-only
+mode does not use cborld at all; it emits plain CBOR. A production deployment
+could register context codes and a custom term table to reduce inline-mode
+bytes further, at the cost of distributing registry metadata.
 
 ### NDJSON framing
 
@@ -224,17 +292,24 @@ There is no BOM, no blank line, and no trailing partial line.
 
 ### CBOR Sequence framing
 
-Each `@digitalbazaar/cborld` `encode()` result is a complete CBOR item. Items are
-written back-to-back with no delimiter, length prefix, enclosing array, or
+Each encoded notification is one complete CBOR item. Items are written
+back-to-back with no delimiter, length prefix, enclosing array, or
 self-described CBOR tag. That concatenation is an RFC 8742 CBOR Sequence.
 
+- Link-only mode: plain `cborg.encode(notification)` items.
+- Inline mode: tagged CBOR-LD 1.0 items.
+
 The client frames the sequence incrementally with `cborg.decodeFirst()`, using
-tag decoders for CBOR-LD 1.0 tag `51997` and the legacy CBOR-LD tags. The
-decoder computes the exact item boundary, then passes the original item bytes
-unchanged to `@digitalbazaar/cborld.decode()`. This works even when an item is
-split across arbitrary transport chunks.
+tag decoders for CBOR-LD 1.0 tag `51997` and the legacy CBOR-LD tags. It then
+passes the exact item bytes to the mode-appropriate decoder: `cborg` for plain
+CBOR or `@digitalbazaar/cborld` for inline-context CBOR-LD. This works even when
+an item is split across arbitrary transport chunks.
 
 ## Client statistics
+
+Each panel displays an illustrative HTTP request and response-header snippet
+before its decoded notification list. The snippet follows that panel's
+link-only/inline mode; the live values below it are computed from the stream.
 
 For each stream the client reports:
 
@@ -251,30 +326,66 @@ The comparison headline uses:
 100 × (NDJSON body bytes − CBOR body bytes) / NDJSON body bytes
 ```
 
-The context document fetch and HTTP headers are not included. The CBOR-LD
-`@context` string is part of the CBOR body and is counted. The client also
-matches notifications by top-level `id`, checks order, and deep-compares the
-logical payloads after removing the CBOR-LD encoding `@context`.
+The context document, cached context data, and HTTP headers are not included.
+When inline mode is active, the inlined `@context` array is part of both response
+bodies and is counted. The client also matches notifications by top-level `id`,
+checks order, and deep-compares the logical payloads after removing any inlined
+`@context`. It never performs RDF processing.
 
 ### Sample measurement
 
-With the default 8 fixtures on local development, one run produced:
+With the default 8 fixtures, one run produced:
+
+**Link-only mode (default)**
 
 | Representation | Body bytes | Average |
 |---|---:|---:|
-| NDJSON | 3,451 | 431.4 B |
-| CBOR Sequence | 2,023 | 252.9 B |
-| Reduction | | **41.4%** |
+| NDJSON | 3,272 | 409.0 B |
+| Plain CBOR Sequence | 2,896 | 362.0 B |
+| Reduction | | **11.5%** |
 
-Exact CBOR bytes vary by a few bytes with the length of the host's context URL.
-Timing depends on machine and network; the first-item figure in particular is
-not a benchmark. Always measure the deployment being evaluated.
+**Inline-context mode**
+
+| Representation | Body bytes | Average |
+|---|---:|---:|
+| NDJSON | 3,944 | 493.0 B |
+| CBOR-LD Sequence | 2,097 | 262.1 B |
+| Reduction | | **46.8%** |
+
+These totals use the generated fixture file in this repository. The
+representations carry fixed-length UUIDs and six-character cuid2 segments, so
+rerunning the fixture generator does not change their size. The public context
+array is fixed and the payloads do not depend on the host name. Timing depends
+on machine and network; the first-item figure in particular is not a benchmark.
+Always measure the deployment being evaluated.
+
+### Fixture generation
+
+`packages/server/fixtures/notifications.json` is generated rather than
+hand-edited. The generator uses:
+
+- `randomUUID()` from `node:crypto` for notification and activity UUID URNs
+- `@paralleldrive/cuid2` initialized with `length: 6` for resource and container
+  identifiers
+- `https://{name}.id.example` actor URLs
+- flat `https://storage.example/{cuid2}` URLs for objects, targets, and origins
+
+Regenerate the committed fixture file with:
+
+```bash
+npm run generate:fixtures
+```
+
+The generated JSON is committed so both representations observe the same
+sequence across concurrent requests and separate serverless instances. Re-run
+the generator only when you intentionally want new random identifiers.
 
 ## Scripts
 
 | Script | Purpose |
 |---|---|
 | `npm run dev` | Start Node server and Vite client together |
+| `npm run generate:fixtures` | Regenerate notification IDs and paths |
 | `npm run dev:server` | `node --watch` the TypeScript server |
 | `npm run dev:client` | Start Vite |
 | `npm run build` | Build client and type-check server + client + root API |
@@ -302,9 +413,8 @@ configuration to those adapters.
 
 `packages/server/adapters/node.ts` uses `@hono/node-server` and executes the
 shared Hono app. The Vite proxy preserves the browser Host (`changeOrigin:
-false`), so the context URL in the Link header and CBOR-LD payload is the
-client-visible origin (`http://localhost:5173`) and can be fetched through the
-proxy.
+false`), so the context URL in the Link header uses the client-visible origin
+(`http://localhost:5173`). The client displays that URL but does not fetch it.
 
 If you change the server port, update the Vite proxy targets in
 `packages/client/vite.config.ts` or set `PORT` and keep the proxy in sync.
@@ -442,11 +552,17 @@ Coverage includes:
 - Accept parsing, quality values, wildcards, defaults, and 406 responses
 - NDJSON one-object-per-line framing and byte counts
 - CBOR Sequence concatenation and exact item boundaries
-- CBOR-LD encode/decode round-trips with the shared context
+- Plain-CBOR and CBOR-LD encode/decode round-trips
+- Link-only and inline-context behavior for both representations
 - Logical equivalence and ordering across both representations
-- Context Link parsing and context-loader URL validation
-- Chunk-boundary robustness: NDJSON and CBOR-LD items fed one byte at a time
-- Incremental CBOR-LD decoding through the client reader
+- Public context URL array and cached-context resolution
+- Context Link parsing for display only
+- Conditional Link context relation: included in link-only mode, omitted inline
+- Generated fixture shape: UUID URNs, actor hosts, and flat six-character cuid2
+  paths
+- Chunk-boundary robustness: NDJSON, plain CBOR, and CBOR-LD items fed one byte
+  at a time
+- Incremental plain-CBOR and CBOR-LD decoding through the client reader
 - Size-reduction and average-byte calculations
 - Client reader cancellation with `AbortController`
 - Server stream cancellation on request abort
@@ -455,15 +571,28 @@ Coverage includes:
 
 ## Design notes and limitations
 
-- The fixtures are synthetic and deterministic; no external storage or auth is
+- The fixtures are synthetic and committed; no external storage or auth is
   involved. This is a benchmark/demo, not a production LWS notification service.
+- The fixture generator uses `crypto.randomUUID()` for UUID URNs and
+  `@paralleldrive/cuid2` with `length: 6` for flat storage paths. Generation is
+  a one-time authoring step; the committed JSON keeps both representations
+  identical across requests and serverless instances.
+- Actors use `https://{name}.id.example`. Objects, targets, and origins use flat
+  `https://storage.example/{cuid2}` URLs.
 - The API returns `Access-Control-Allow-Origin: *` and exposes Link metadata for
   demonstration convenience. Tighten CORS for a real deployment.
 - The context URL is derived from the request origin so it works on every host.
   Production deployments should sit behind a trusted host/proxy, or make the
   public origin explicit if Host-header manipulation is a concern.
-- The context document is cached by the client and served with a one-hour cache
-  lifetime by the server.
+- The public Link context document contains only the official context URLs and
+  is served with a one-hour cache lifetime by the server. It is advertised with
+  a Link relation only in link-only mode. The client parses the Link URL for
+  display when present but never fetches or resolves it.
+- cborld requires resolved context documents behind those URLs. The server
+  imports them from `cached-context.json`; the client bundles the same data as
+  opaque decode-cache input. The client treats decoded items as plain JSON, uses
+  the cache only for decompression, and strips `@context` before display and
+  comparison.
 - The server emits one encoded item per stream chunk. TCP/HTTP framing and
   serverless platform buffering may regroup chunks in transit; the client
   readers are explicitly chunk-boundary independent.

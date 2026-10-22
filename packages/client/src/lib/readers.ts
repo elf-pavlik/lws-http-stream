@@ -1,10 +1,12 @@
-import { decode as cborldDecode } from '@digitalbazaar/cborld';
-import type { DocumentLoader } from '@digitalbazaar/cborld';
 import { concatBytes } from './bytes.ts';
 import { tryTakeCborItem, takeCborItem } from './cborSequence.ts';
 import { NdjsonDecoder } from './ndjson.ts';
 import { normalizeNotificationDocument } from './stats.ts';
 import type { ReaderCallbacks } from './types.ts';
+
+export type CborItemDecoder = (
+  item: Uint8Array,
+) => Promise<Record<string, unknown>> | Record<string, unknown>;
 
 const abortError = (): DOMException =>
   new DOMException('The notification stream was aborted.', 'AbortError');
@@ -45,7 +47,7 @@ export async function readNdjsonStream(
 
 export async function readCborSequenceStream(
   response: Response,
-  documentLoader: DocumentLoader,
+  decodeItem: CborItemDecoder,
   callbacks: ReaderCallbacks = {},
   signal?: AbortSignal,
 ): Promise<void> {
@@ -67,7 +69,7 @@ export async function readCborSequenceStream(
       callbacks.onBytes?.(bytesReceived);
       buffer = concatBytes(buffer, value);
 
-      buffer = await drainCompleteItems(buffer, documentLoader, {
+      buffer = await drainCompleteItems(buffer, decodeItem, {
         callbacks,
         startedAt,
         bytesReceived,
@@ -82,10 +84,7 @@ export async function readCborSequenceStream(
   // Drain again with strict framing so a truncated final item is reported.
   while (buffer.length > 0) {
     const frame = takeCborItem(buffer);
-    const document = await cborldDecode({
-      cborldBytes: frame.item,
-      documentLoader,
-    });
+    const document = await decodeItem(frame.item);
     messageIndex += 1;
     callbacks.onNotification?.(normalizeNotificationDocument(document), {
       bytes: frame.item.byteLength,
@@ -99,7 +98,7 @@ export async function readCborSequenceStream(
 
 async function drainCompleteItems(
   initial: Uint8Array,
-  documentLoader: DocumentLoader,
+  decodeItem: CborItemDecoder,
   context: {
     callbacks: ReaderCallbacks;
     startedAt: number;
@@ -115,10 +114,7 @@ async function drainCompleteItems(
       break;
     }
 
-    const document = await cborldDecode({
-      cborldBytes: frame.item,
-      documentLoader,
-    });
+    const document = await decodeItem(frame.item);
     context.callbacks.onNotification?.(normalizeNotificationDocument(document), {
       bytes: frame.item.byteLength,
       index: context.nextIndex(),
