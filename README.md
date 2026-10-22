@@ -3,6 +3,10 @@
 >[!NOTE]
 > Generated with opencode-go/DeepSeek V4.1 Flash (max)
 
+>[!TIP]
+> * https://cbor-ld-stream-demo.elf-pavlik.workers.dev
+> * https://lws-http-stream.vercel.app
+
 A small full-stack demonstration of streaming Linked Web Storage (LWS)
 notifications over HTTP, comparing three representations of the same ordered
 notification sequence:
@@ -14,9 +18,10 @@ notification sequence:
   `application/x-jelly-rdf`.
 
 Each NDJSON/CBOR panel has its own `@context` toggle controlling whether the
-context is only advertised in the HTTP `Link` header (default) or is also
-inlined into every notification. The Jelly panel has no context toggle; it is a
-binary RDF stream. The SolidJS client opens all three streams concurrently,
+context is only advertised in the HTTP `Link` header or is also inlined into
+every notification. NDJSON starts in link-only mode; CBOR starts with the
+context inlined. The Jelly panel has no context toggle; it is a binary RDF
+stream. The SolidJS client opens all three streams concurrently,
 decodes them incrementally, matches notifications by ID, and computes byte
 statistics from the actual response bodies. The Jelly panel reconstructs
 notifications from decoded RDF/JS quads for display; no RDF querying or JSON-LD
@@ -227,12 +232,13 @@ serves `packages/client/dist`, with API rewrites to `api/*`.
 ## Context and encoding modes
 
 The endpoint supports two context modes for NDJSON and CBOR, controlled by the
-`context` query parameter. Jelly-RDF ignores this parameter and is always a
-binary RDF stream.
+`context` query parameter. The server default is `link`; the client's CBOR panel
+starts with `inline` enabled, while the NDJSON panel starts in link-only mode.
+Jelly-RDF ignores this parameter and is always a binary RDF stream.
 
 | Mode | Query | Link context relation | NDJSON | CBOR Sequence |
 |---|---|---|---|---|
-| Link-only (default) | `context=link` | included | no inlined `@context` | plain CBOR, no CBOR-LD tag, no `@context` |
+| Link-only (server default) | `context=link` | included | no inlined `@context` | plain CBOR, no CBOR-LD tag, no `@context` |
 | Inline | `context=inline` | omitted | `@context` in every line | CBOR-LD with `@context` in every item |
 
 In link-only mode the response includes:
@@ -498,7 +504,7 @@ the generator only when you intentionally want new random identifiers.
 | `npm test` | Run server and client unit/integration tests |
 | `npm run smoke:adapters` | Invoke Cloudflare and Vercel adapters with Web Requests |
 | `npm run smoke:cloudflare` | Build, start `wrangler dev` in workerd, verify all three streams |
-| `npm run smoke:vercel` | Start `vercel dev --local`, verify functions and client |
+| `npm run smoke:vercel` | Build production Vercel output and invoke the built function |
 | `npm run deploy:cloudflare` | Build client and run `wrangler deploy` |
 | `npm run deploy:vercel` | Build client and run `vercel deploy --prod` |
 | `npm run preview:cloudflare` | Build client and run local `wrangler dev` |
@@ -631,20 +637,28 @@ npx vercel link             # once, from the repository root
 npm run deploy:vercel
 ```
 
-Run a local Vercel check:
+Run a Vercel check:
 
 ```bash
 npm run smoke:vercel
-# or interactively:
+# or interactively for the dev server:
 npx vercel dev --local
 ```
 
-The smoke test starts `vercel dev --local` on port 3009, waits for the local
-Vercel Function runtime, checks health, all three streams, context, and the Vite
-client, then stops the process tree. It requires no Vercel account because it
-uses local mode.
+`npm run smoke:vercel` runs an actual `vercel build`, imports the built
+`api/notifications` function, and checks NDJSON, CBOR, and Jelly against the
+production output. This is the check that catches deployment-time issues such as
+unrewritten `.ts` import specifiers. The interactive `vercel dev --local` command
+is still useful for testing the Vite client and local routing.
 
 Actual `vercel deploy --prod` requires a linked project and authentication.
+
+The root `tsconfig.json` enables `rewriteRelativeImportExtensions`. This is
+required for Vercel's TypeScript transpilation: server source imports use
+explicit `.ts` extensions for Node native type stripping, and Vercel must rewrite
+them to `.js` in the deployed function output. `npm run smoke:vercel` builds the
+actual production output and invokes the built function, covering NDJSON, CBOR,
+and Jelly.
 
 ## Testing
 
@@ -677,7 +691,7 @@ Coverage includes:
 - Client reader cancellation with `AbortController`
 - Server stream cancellation on request abort
 - Cloudflare Worker and Vercel Function adapter smoke tests
-- Real workerd and `vercel dev --local` deployment smoke tests
+- Real workerd and Vercel production-build smoke tests
 
 ## Design notes and limitations
 
@@ -719,3 +733,7 @@ Coverage includes:
 - The default Node process is watch-mode during development. Stopping/restarting
   the client aborts its requests; the generator stops rather than finishing the
   remaining sequence.
+
+## License
+
+[MIT](./LICENSE) © 2026 elf Pavlik

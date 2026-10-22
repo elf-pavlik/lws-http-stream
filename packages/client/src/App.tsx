@@ -15,7 +15,7 @@ export default function App() {
   const [count, setCount] = createSignal(INITIAL_COUNT);
   const [intervalMs, setIntervalMs] = createSignal(INITIAL_INTERVAL_MS);
   const [ndjsonInlineContext, setNdjsonInlineContext] = createSignal(false);
-  const [cborInlineContext, setCborInlineContext] = createSignal(false);
+  const [cborInlineContext, setCborInlineContext] = createSignal(true);
 
   const ndjson = createStreamSession('ndjson', {
     count: INITIAL_COUNT,
@@ -25,7 +25,7 @@ export default function App() {
   const cbor = createStreamSession('cbor-seq', {
     count: INITIAL_COUNT,
     intervalMs: INITIAL_INTERVAL_MS,
-    inlineContext: false,
+    inlineContext: true,
   });
   const jelly = createStreamSession('jelly', {
     count: INITIAL_COUNT,

@@ -6,6 +6,7 @@
     "moduleResolution": "NodeNext",
     "moduleDetection": "auto",
     "allowImportingTsExtensions": true,
+    "rewriteRelativeImportExtensions": true,
     "verbatimModuleSyntax": true,
     "erasableSyntaxOnly": true,
     "isolatedModules": true,

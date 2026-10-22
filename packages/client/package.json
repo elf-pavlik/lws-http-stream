@@ -1,6 +1,7 @@
 {
   "name": "@lws-stream/client",
   "version": "0.1.0",
+  "license": "MIT",
   "private": true,
   "type": "module",
   "description": "SolidJS client comparing NDJSON-LD and CBOR-LD notification streams",

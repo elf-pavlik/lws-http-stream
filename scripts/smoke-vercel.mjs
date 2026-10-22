@@ -1,176 +1,95 @@
 import assert from 'node:assert/strict';
-import { spawn } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
+import { execFile } from 'node:child_process';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { stopProcessTree } from './process-tree.mjs';
+import { fileURLToPath } from 'node:url';
+import { promisify } from 'node:util';
+import { Parser } from 'rdfjs-jelly/browser';
 
+const run = promisify(execFile);
 const root = fileURLToPath(new URL('..', import.meta.url));
-const port = 3009;
-const origin = `http://127.0.0.1:${port}`;
-const vercelBin = path.join(root, 'node_modules', 'vercel', 'dist', 'vc.js');
-
-const child = spawn(
-  process.execPath,
-  [
-    vercelBin,
-    'dev',
-    '--local',
-    '--listen',
-    `127.0.0.1:${port}`,
-    '--yes',
-    '--non-interactive',
-    '--runtime-cache-port',
-    '4790',
-    '--queue-port',
-    '4791',
-    '--schedules-port',
-    '4792',
-  ],
-  {
-    cwd: root,
-    env: {
-      ...process.env,
-      CI: '1',
-      VERCEL_TELEMETRY_DISABLED: '1',
-    },
-    detached: true,
-    stdio: ['ignore', 'pipe', 'pipe'],
-  },
-);
-
-let logs = '';
-child.stdout.on('data', chunk => {
-  logs += chunk.toString();
-});
-child.stderr.on('data', chunk => {
-  logs += chunk.toString();
-});
-
-let stopped = false;
-function stop() {
-  if (stopped) {
-    return;
-  }
-  stopped = true;
-  try {
-    process.kill(-child.pid, 'SIGTERM');
-  } catch {
-    // Already gone.
-  }
-}
-
-process.on('exit', stop);
+const outputDir = await mkdtemp(path.join(tmpdir(), 'lws-vercel-build-'));
 
 try {
-  await waitForServer();
-  await checkHealth();
-  await checkStreams();
-  await checkContext();
-  await checkClient();
-  console.log('Vercel dev smoke test passed.');
-} catch (error) {
-  console.error('\nVercel smoke test failed.');
-  console.error(logs);
-  throw error;
-} finally {
-  await stopProcessTree(child);
-}
+  console.log('Building production Vercel output...');
+  await run(
+    process.execPath,
+    [
+      path.join(root, 'node_modules', 'vercel', 'dist', 'vc.js'),
+      'build',
+      '--yes',
+      '--local-config',
+      'vercel.json',
+      '--output',
+      outputDir,
+    ],
+    {
+      cwd: root,
+      env: { ...process.env, CI: '1', VERCEL_TELEMETRY_DISABLED: '1' },
+      maxBuffer: 20 * 1024 * 1024,
+    },
+  );
 
-async function waitForServer() {
-  const deadline = Date.now() + 45_000;
-  while (Date.now() < deadline) {
-    if (child.exitCode !== null) {
-      throw new Error(`vercel dev exited early with code ${child.exitCode}`);
-    }
-    try {
-      const response = await fetch(`${origin}/health`, {
-        signal: AbortSignal.timeout(2_000),
-      });
-      if (response.ok) {
-        return;
-      }
-    } catch {
-      // Not ready yet.
-    }
-    await new Promise(resolve => setTimeout(resolve, 300));
-  }
-  throw new Error('Timed out waiting for vercel dev');
-}
+  const functionDir = path.join(
+    outputDir,
+    'functions',
+    'api',
+    'notifications.func',
+  );
+  const { default: notifications } = await import(
+    path.join(functionDir, 'api', 'notifications.js')
+  );
+  const origin = 'https://smoke.example';
 
-async function checkHealth() {
-  const response = await fetch(`${origin}/health`);
-  assert.equal(response.status, 200);
-  const body = await response.json();
-  assert.equal(body.status, 'ok');
-  console.log(`Vercel /health: ${body.service}`);
-}
-
-async function checkStreams() {
-  const [ndjson, cbor, jelly] = await Promise.all([
-    fetch(`${origin}/notifications?count=3&interval=0`, {
+  const ndjson = await notifications.fetch(
+    new Request(`${origin}/api/notifications?count=2&interval=0`, {
       headers: { Accept: 'application/x-ndjson' },
     }),
-    fetch(`${origin}/notifications?count=3&interval=0`, {
-      headers: { Accept: 'application/cbor-seq' },
-    }),
-    fetch(`${origin}/notifications?count=3&interval=0`, {
-      headers: { Accept: 'application/x-jelly-rdf' },
-    }),
-  ]);
-
+  );
   assert.equal(ndjson.status, 200);
   assert.equal(ndjson.headers.get('content-type'), 'application/x-ndjson');
-  const ndjsonBytes = new Uint8Array(await ndjson.arrayBuffer());
-  assert.equal(new TextDecoder().decode(ndjsonBytes).trimEnd().split('\n').length, 3);
+  assert.ok(ndjson.headers.get('link'));
+  assert.equal((await ndjson.text()).trimEnd().split('\n').length, 2);
 
-  assert.equal(cbor.status, 200);
-  assert.equal(cbor.headers.get('content-type'), 'application/cbor-seq');
-  const cborBytes = new Uint8Array(await cbor.arrayBuffer());
-  assert.ok(cborBytes.byteLength > 10);
-  assert.notDeepEqual(Array.from(cborBytes.subarray(0, 3)), [0xd9, 0xcb, 0x1d]);
-
-  const [inlineNdjson, inlineCbor] = await Promise.all([
-    fetch(`${origin}/notifications?count=2&interval=0&context=inline`, {
-      headers: { Accept: 'application/x-ndjson' },
-    }),
-    fetch(`${origin}/notifications?count=2&interval=0&context=inline`, {
+  const cbor = await notifications.fetch(
+    new Request(`${origin}/api/notifications?count=2&interval=0`, {
       headers: { Accept: 'application/cbor-seq' },
     }),
-  ]);
-  assert.match(await inlineNdjson.text(), /"@context"/);
-  assert.equal(inlineNdjson.headers.get('link'), null);
-  const inlineCborBytes = new Uint8Array(await inlineCbor.arrayBuffer());
-  assert.deepEqual(Array.from(inlineCborBytes.subarray(0, 3)), [0xd9, 0xcb, 0x1d]);
-  assert.equal(inlineCbor.headers.get('link'), null);
+  );
+  assert.equal(cbor.status, 200);
+  assert.equal(cbor.headers.get('content-type'), 'application/cbor-seq');
+  assert.ok(cbor.headers.get('link'));
+  assert.ok((await cbor.arrayBuffer()).byteLength > 10);
 
+  const inline = await notifications.fetch(
+    new Request(`${origin}/api/notifications?count=2&interval=0&context=inline`, {
+      headers: { Accept: 'application/cbor-seq' },
+    }),
+  );
+  assert.equal(inline.status, 200);
+  assert.equal(inline.headers.get('link'), null);
+  assert.ok((await inline.arrayBuffer()).byteLength > 10);
+
+  const jelly = await notifications.fetch(
+    new Request(`${origin}/api/notifications?count=2&interval=0`, {
+      headers: { Accept: 'application/x-jelly-rdf' },
+    }),
+  );
   assert.equal(jelly.status, 200);
   assert.equal(jelly.headers.get('content-type'), 'application/x-jelly-rdf');
   assert.equal(jelly.headers.get('link'), null);
   const jellyBytes = new Uint8Array(await jelly.arrayBuffer());
   assert.ok(jellyBytes.byteLength > 10);
   assert.notEqual(jellyBytes[0], 0x0a);
+  const messages = new Parser({ messages: true }).parseMessages(jellyBytes);
+  assert.equal(messages.length, 2);
+  assert.ok(messages[0].length > 0);
 
-  assert.ok(ndjson.headers.get('link'));
-  assert.equal(ndjson.headers.get('link'), cbor.headers.get('link'));
-  console.log(
-    `Vercel streams: ${ndjsonBytes.byteLength} NDJSON bytes, ` +
-      `${cborBytes.byteLength} plain CBOR bytes, ${inlineCborBytes.byteLength} inline CBOR-LD bytes, ` +
-      `${jellyBytes.byteLength} Jelly bytes`,
-  );
-}
-
-async function checkContext() {
-  const response = await fetch(`${origin}/contexts/lws-notifications-v1.jsonld`);
-  assert.equal(response.status, 200);
-  const document = await response.json();
-  assert.ok(document['@context']);
-  console.log('Vercel context endpoint: ok');
-}
-
-async function checkClient() {
-  const response = await fetch(`${origin}/`);
-  assert.equal(response.status, 200);
-  const html = await response.text();
-  assert.match(html, /LWS stream size lab/);
-  console.log('Vercel client dev server: ok');
+  console.log('Vercel production build smoke test passed.');
+  console.log(`  NDJSON: ${ndjson.headers.get('content-type')}`);
+  console.log(`  CBOR: ${cbor.headers.get('content-type')}`);
+  console.log(`  Jelly: ${jellyBytes.byteLength} bytes, ${messages.length} frames`);
+} finally {
+  await rm(outputDir, { recursive: true, force: true });
 }
