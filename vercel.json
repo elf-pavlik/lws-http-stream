@@ -1,0 +1,33 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "installCommand": "npm ci",
+  "buildCommand": "npm run build:client",
+  "devCommand": "npm run dev:client",
+  "outputDirectory": "packages/client/dist",
+  "functions": {
+    "api/notifications.ts": {
+      "maxDuration": 60,
+      "supportsCancellation": true
+    },
+    "api/health.ts": {
+      "maxDuration": 10
+    },
+    "api/contexts.ts": {
+      "maxDuration": 10
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/notifications",
+      "destination": "/api/notifications"
+    },
+    {
+      "source": "/health",
+      "destination": "/api/health"
+    },
+    {
+      "source": "/contexts/:path*",
+      "destination": "/api/contexts"
+    }
+  ]
+}

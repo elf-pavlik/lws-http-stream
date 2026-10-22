@@ -1,0 +1,45 @@
+{
+  "@context": {
+    "@version": 1.1,
+    "@protected": true,
+    "lws": "https://www.w3.org/ns/lws#",
+    "as": "https://www.w3.org/ns/activitystreams#",
+    "xsd": "http://www.w3.org/2001/XMLSchema#",
+    "id": "@id",
+    "type": "@type",
+    "Notification": "lws:Notification",
+    "DataResource": "lws:DataResource",
+    "Container": "lws:Container",
+    "Storage": "lws:Storage",
+    "storage": {
+      "@id": "lws:storage",
+      "@type": "@id"
+    },
+    "activity": {
+      "@id": "lws:activity"
+    },
+    "actor": {
+      "@id": "as:actor",
+      "@type": "@id"
+    },
+    "object": {
+      "@id": "as:object"
+    },
+    "origin": {
+      "@id": "as:origin",
+      "@type": "@id"
+    },
+    "target": {
+      "@id": "as:target",
+      "@type": "@id"
+    },
+    "published": {
+      "@id": "as:published",
+      "@type": "xsd:dateTime"
+    },
+    "Create": "as:Create",
+    "Update": "as:Update",
+    "Delete": "as:Delete",
+    "Move": "as:Move"
+  }
+}
