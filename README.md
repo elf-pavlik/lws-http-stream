@@ -34,7 +34,9 @@ Function adapters.
 
 ## References
 
-- [Linked Web Storage (LWS) Protocol](https://w3c.github.io/lws-protocol/lws10-core/)
+- [Linked Web Storage (LWS) Protocol - Notifications](https://w3c.github.io/lws-protocol/lws10-core/#notifications)
+- [RDF Messages](https://w3c-cg.github.io/rsp/spec/messages)
+- [Solid Notifications: StreamingHTTPChannel2023](https://solid.github.io/notifications/streaming-http-channel-2023)
 - [JSON-LD 1.1](https://www.w3.org/TR/json-ld11/)
 - [CBOR-LD](https://w3c.github.io/cbor-ld/)
 - [NDJSON Specification](https://github.com/ndjson/ndjson-spec)
