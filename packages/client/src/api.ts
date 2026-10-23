@@ -9,20 +9,17 @@ export const MEDIA_TYPES: Readonly<Record<Representation, string>> = {
 const JSON_LD_CONTEXT_REL = 'http://www.w3.org/ns/json-ld#context';
 
 export interface StreamRequestOptions {
-  count: number;
   intervalMs: number;
   inlineContext: boolean;
   signal: AbortSignal;
 }
 
 export function notificationsUrl(options: {
-  count: number;
   intervalMs: number;
   inlineContext: boolean;
   representation?: Representation;
 }): string {
   const params = new URLSearchParams({
-    count: String(options.count),
     interval: String(options.intervalMs),
   });
   if (options.representation !== 'jelly') {

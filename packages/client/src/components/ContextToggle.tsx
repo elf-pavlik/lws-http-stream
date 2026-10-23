@@ -9,7 +9,7 @@ export function ContextToggle(props: {
       aria-checked={props.checked}
       class="context-toggle panel-context-toggle"
       classList={{ active: props.checked }}
-      title="Re-runs this stream with or without an inlined @context"
+      title="Toggles @context and, while streams are running, restarts all three"
       onClick={() => props.onToggle()}
     >
       <span class="context-toggle-label">@context</span>

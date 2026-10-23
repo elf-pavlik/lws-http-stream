@@ -21,11 +21,12 @@ Each NDJSON/CBOR panel has its own `@context` toggle controlling whether the
 context is only advertised in the HTTP `Link` header or is also inlined into
 every notification. NDJSON starts in link-only mode; CBOR starts with the
 context inlined. The Jelly panel has no context toggle; it is a binary RDF
-stream. The SolidJS client opens all three streams concurrently,
-decodes them incrementally, matches notifications by ID, and computes byte
-statistics from the actual response bodies. The Jelly panel reconstructs
-notifications from decoded RDF/JS quads for display; no RDF querying or JSON-LD
-expansion is performed.
+stream. The SolidJS client opens all three streams concurrently after you press
+**Start all streams**, decodes them incrementally, matches notifications by ID,
+and computes byte statistics from the actual response bodies. The notification
+lists are virtualized, so only the visible rows are mounted. The Jelly panel
+reconstructs notifications from decoded RDF/JS quads for display; no RDF
+querying or JSON-LD expansion is performed.
 
 The server is shared TypeScript using Web-standard `Request`, `Response`,
 `ReadableStream`, and `Uint8Array` APIs. It runs directly on Node.js with native
@@ -68,12 +69,13 @@ Vite proxies `/notifications`, `/health`, and `/contexts` to the Node server, so
 the browser makes same-origin streaming requests and does not need CORS in
 local development.
 
-The server defaults to 8 generated notifications at 250 ms intervals. The
-client starts with a 50-notification, 500 ms stream so the page has time to
-demonstrate streaming. The NDJSON and CBOR panels each have their own `@context`
-toggle; toggling one immediately re-runs only that stream. The Jelly stream is
-independent of the context mode. Change the count/interval controls or press
-**Stop both** to test cancellation.
+The server defaults to a 250 ms interval. The client uses a 500 ms interval and
+streams indefinitely until you press **Stop all streams**; it does not start
+until you press **Start all streams**. While a stream is running, the same
+button becomes **Re-start all streams**, and **Stop all streams** aborts every
+response body. The NDJSON and CBOR panels each have their own `@context`
+toggle; toggling either one restarts all three streams so their sequences stay
+aligned. The Jelly stream is independent of the context mode.
 
 ### Get all three representations with curl
 
@@ -107,15 +109,17 @@ curl -i 'http://localhost:5173/contexts/lws-notifications-v1.jsonld' \
 
 Use `http://localhost:8787` instead of `:5173` to call the Node server directly.
 The CBOR output is binary, so writing it to a file and inspecting it with `od`
-avoids dumping binary data into the terminal.
+avoids dumping binary data into the terminal. These examples pass `count=3` so
+`curl` exits on its own; omit `count` for an infinite stream and use
+`--max-time` or a limiting consumer.
 
 ## API
 
-### `GET /notifications?count=8&interval=250`
+### `GET /notifications?interval=250`
 
 | Query | Default | Range | Meaning |
 |---|---:|---:|---|
-| `count` | `8` | 1–100 | Number of notifications; fixtures repeat if needed |
+| `count` | omitted (infinite) | 1–100 | Optional finite number of notifications; the fixture sequence repeats |
 | `interval` | `250` | 0–5000 ms | Delay between notifications |
 | `context` | `link` | `link` or `inline` | NDJSON/CBOR only; ignored for Jelly |
 
@@ -152,8 +156,10 @@ Vary: Accept
 ```
 
 The first notification is sent immediately; later notifications are separated
-by the configured interval. The response is a real streaming response, not a
-buffered body. Request abort and reader cancellation stop the producer.
+by the configured interval. If `count` is omitted, the fixture sequence repeats
+indefinitely until the client disconnects. The response is a real streaming
+response, not a buffered body. Request abort and reader cancellation stop the
+producer.
 
 ### `GET /health`
 
@@ -440,8 +446,8 @@ The context document, cached context data, and HTTP headers are not included.
 When inline mode is active for NDJSON/CBOR, the inlined `@context` array is part
 of those response bodies and is counted. The Jelly body is independent of the
 context toggle. The client matches notifications by top-level `id` across all
-three streams, checks order, and deep-compares the logical payloads after
-removing any inlined `@context`.
+three streams. The summary shows a running notification count plus the
+independent per-stream counts.
 
 Jelly frame byte sizes are not exposed by the incremental parser, so the
 per-message list shows “stream frame” for Jelly. Total body bytes, decoded message
@@ -449,7 +455,7 @@ counts, and average bytes per message are exact.
 
 ### Sample measurement
 
-With the default 8 fixtures, one run produced:
+With `count=8`, one run produced:
 
 **Link-only mode (default)**
 
@@ -523,7 +529,6 @@ the generator only when you intentionally want new random identifiers.
 Server environment variables (Node adapter only):
 
 - `PORT` (default `8787`)
-- `NOTIFICATION_COUNT` (default `8`)
 - `NOTIFICATION_INTERVAL_MS` (default `250`)
 
 Cloudflare and Vercel use the shared defaults; query parameters work on every
@@ -636,7 +641,7 @@ Rewrites map the public API paths to the functions:
 
 Static client output is served from `packages/client/dist`; the root `api/`
 functions are deployed alongside it. Vercel's `maxDuration` plan limits still
-apply. The default stream is about 1.75 seconds; for long streams keep
+apply to infinite UI streams. For a finite stream, keep
 `(count − 1) × interval` within the selected plan's function duration. Longer
 experiments can be run locally on the Node server.
 

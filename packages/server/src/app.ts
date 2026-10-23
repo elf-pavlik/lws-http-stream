@@ -6,7 +6,7 @@ import {
   LWS_CONTEXT_PATH,
   contextUrlFor,
 } from './context.ts';
-import { selectNotifications } from './notifications.ts';
+import { notificationFixtures } from './notifications.ts';
 import {
   DEFAULT_REPRESENTATION,
   MEDIA_TYPES,
@@ -16,12 +16,10 @@ import {
 import { createNotificationStream } from './stream.ts';
 
 export interface AppOptions {
-  defaultCount?: number;
   defaultIntervalMs?: number;
   onChunk?: Parameters<typeof createNotificationStream>[0]['onChunk'];
 }
 
-export const DEFAULT_COUNT = 8;
 export const DEFAULT_INTERVAL_MS = 250;
 export const MAX_COUNT = 100;
 export const MAX_INTERVAL_MS = 5_000;
@@ -31,7 +29,6 @@ const CONTEXT_MODES = ['link', 'inline'] as const;
 const DEFAULT_CONTEXT_MODE = 'link';
 
 export function createApp(options: AppOptions = {}): Hono {
-  const defaultCount = options.defaultCount ?? DEFAULT_COUNT;
   const defaultIntervalMs = options.defaultIntervalMs ?? DEFAULT_INTERVAL_MS;
   const app = new Hono();
 
@@ -85,9 +82,8 @@ export function createApp(options: AppOptions = {}): Hono {
       );
     }
 
-    const count = parseIntegerParameter(
+    const count = parseOptionalIntegerParameter(
       c.req.query('count'),
-      defaultCount,
       1,
       MAX_COUNT,
     );
@@ -111,13 +107,14 @@ export function createApp(options: AppOptions = {}): Hono {
       return invalidContextMode(c);
     }
 
-    const notifications = selectNotifications(count);
+    const notifications = notificationFixtures;
 
     const body = createNotificationStream({
       notifications,
       representation: negotiation.representation,
       inlineContext: !isJelly && contextMode === 'inline',
       intervalMs,
+      count: count ?? Number.POSITIVE_INFINITY,
       signal: c.req.raw.signal,
       onChunk: options.onChunk,
     });
@@ -192,6 +189,17 @@ function parseIntegerParameter(
     return null;
   }
   return value;
+}
+
+function parseOptionalIntegerParameter(
+  raw: string | undefined,
+  minimum: number,
+  maximum: number,
+): number | undefined | null {
+  if (raw === undefined) {
+    return undefined;
+  }
+  return parseIntegerParameter(raw, minimum, minimum, maximum);
 }
 
 function invalidContextMode(c: Context): Response {

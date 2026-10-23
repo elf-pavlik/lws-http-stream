@@ -55,18 +55,17 @@ describe('Link header context parsing', () => {
 describe('notification URLs', () => {
   it('always includes the context mode', () => {
     expect(
-      notificationsUrl({ count: 8, intervalMs: 250, inlineContext: false }),
-    ).toBe('/notifications?count=8&interval=250&context=link');
+      notificationsUrl({ intervalMs: 250, inlineContext: false }),
+    ).toBe('/notifications?interval=250&context=link');
     expect(
-      notificationsUrl({ count: 8, intervalMs: 250, inlineContext: true }),
-    ).toBe('/notifications?count=8&interval=250&context=inline');
+      notificationsUrl({ intervalMs: 250, inlineContext: true }),
+    ).toBe('/notifications?interval=250&context=inline');
     expect(
       notificationsUrl({
-        count: 8,
         intervalMs: 250,
         inlineContext: true,
         representation: 'jelly',
       }),
-    ).toBe('/notifications?count=8&interval=250');
+    ).toBe('/notifications?interval=250');
   });
 });

@@ -42,6 +42,7 @@ export function StreamPanel(props: {
       <NotificationList
         items={props.session.items()}
         counterpartIds={props.counterpartIds}
+        status={props.session.stats().status}
       />
 
       <Show when={props.session.stats().contextUrl}>

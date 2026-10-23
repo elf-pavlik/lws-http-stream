@@ -40,7 +40,6 @@ describe('notification stream production', () => {
   it('stops producing after request abort', async () => {
     let sent = 0;
     const app = createApp({
-      defaultCount: 20,
       defaultIntervalMs: 1_000,
       onChunk: () => {
         sent += 1;
@@ -66,6 +65,41 @@ describe('notification stream production', () => {
 
     await new Promise(resolve => setTimeout(resolve, 150));
     expect(sent).toBe(1);
+  });
+
+  it('cycles the fixture sequence forever when count is omitted', async () => {
+    let sent = 0;
+    const app = createApp({
+      defaultIntervalMs: 0,
+      onChunk: () => {
+        sent += 1;
+      },
+    });
+    const response = await app.fetch(
+      new Request('https://demo.example/notifications?interval=0', {
+        headers: { Accept: 'application/x-ndjson' },
+      }),
+    );
+    const reader = response.body!.getReader();
+    const decoder = new TextDecoder();
+    let text = '';
+
+    while (text.split('\n').length <= notificationFixtures.length + 1) {
+      const { value, done } = await reader.read();
+      if (done) {
+        break;
+      }
+      text += decoder.decode(value, { stream: true });
+    }
+    await reader.cancel();
+
+    const documents = text
+      .trimEnd()
+      .split('\n')
+      .map(line => JSON.parse(line) as { id: string });
+    expect(documents.length).toBeGreaterThanOrEqual(notificationFixtures.length + 1);
+    expect(documents[notificationFixtures.length]!.id).toBe(notificationFixtures[0]!.id);
+    expect(sent).toBeGreaterThan(notificationFixtures.length);
   });
 
   it('flushes the first notification before the interval elapses', async () => {

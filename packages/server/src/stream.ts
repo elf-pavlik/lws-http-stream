@@ -17,6 +17,8 @@ export interface NotificationStreamOptions {
   representation: Representation;
   inlineContext: boolean;
   intervalMs: number;
+  /** Number of notifications to emit. Omit to cycle the input forever. */
+  count?: number;
   signal?: AbortSignal;
   onChunk?: (event: ChunkEvent) => void;
 }
@@ -29,7 +31,25 @@ export interface NotificationStreamOptions {
 export function createNotificationStream(
   options: NotificationStreamOptions,
 ): ReadableStream<Uint8Array> {
-  const { notifications, representation, inlineContext, intervalMs, signal, onChunk } = options;
+  const {
+    notifications,
+    representation,
+    inlineContext,
+    intervalMs,
+    signal,
+    onChunk,
+  } = options;
+  const count = options.count ?? notifications.length;
+
+  if (notifications.length === 0) {
+    throw new RangeError('notifications must not be empty');
+  }
+  if (
+    count !== Number.POSITIVE_INFINITY &&
+    (!Number.isInteger(count) || count < 1)
+  ) {
+    throw new RangeError('count must be a positive integer or Infinity');
+  }
 
   let cancelled = signal?.aborted ?? false;
   let consumerCancelled = false;
@@ -83,12 +103,14 @@ export function createNotificationStream(
         representation === 'jelly' ? createJellyNotificationEncoder() : undefined;
 
       try {
-        for (let index = 0; index < notifications.length; index += 1) {
+        for (let index = 0; index < count; index += 1) {
           if (cancelled) {
             break;
           }
 
-          if (index > 0 && intervalMs > 0) {
+          if (index > 0) {
+            // Always yield between chunks, including interval=0, so an infinite
+            // stream cannot monopolize the event loop or outrun its reader.
             await delay(intervalMs);
           }
 
@@ -96,7 +118,7 @@ export function createNotificationStream(
             break;
           }
 
-          const notification = notifications[index]!;
+          const notification = notifications[index % notifications.length]!;
           const encodedChunks: Uint8Array[] =
             representation === 'jelly'
               ? jellyEncoder!.addNotification(notification)

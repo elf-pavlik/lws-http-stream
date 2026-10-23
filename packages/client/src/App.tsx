@@ -2,86 +2,34 @@ import { For, Show, createMemo, createSignal } from 'solid-js';
 import { StreamPanel } from './components/StreamPanel.tsx';
 import { createStreamSession } from './lib/session.ts';
 import {
-  documentsEqual,
-  formatBytes,
   formatPercent,
   sizeReduction,
 } from './lib/stats.ts';
 
-const INITIAL_COUNT = 50;
 const INITIAL_INTERVAL_MS = 500;
 
 export default function App() {
-  const [count, setCount] = createSignal(INITIAL_COUNT);
   const [intervalMs, setIntervalMs] = createSignal(INITIAL_INTERVAL_MS);
   const [ndjsonInlineContext, setNdjsonInlineContext] = createSignal(false);
   const [cborInlineContext, setCborInlineContext] = createSignal(true);
 
-  const ndjson = createStreamSession('ndjson', {
-    count: INITIAL_COUNT,
-    intervalMs: INITIAL_INTERVAL_MS,
-    inlineContext: false,
-  });
-  const cbor = createStreamSession('cbor-seq', {
-    count: INITIAL_COUNT,
-    intervalMs: INITIAL_INTERVAL_MS,
-    inlineContext: true,
-  });
-  const jelly = createStreamSession('jelly', {
-    count: INITIAL_COUNT,
-    intervalMs: INITIAL_INTERVAL_MS,
-    inlineContext: false,
-  });
+  const ndjson = createStreamSession('ndjson');
+  const cbor = createStreamSession('cbor-seq');
+  const jelly = createStreamSession('jelly');
+
+  const isRunning = createMemo(() =>
+    [ndjson, cbor, jelly].some(session => {
+      const status = session.stats().status;
+      return status === 'connecting' || status === 'streaming';
+    }),
+  );
+
+  const hasStarted = createMemo(() =>
+    [ndjson, cbor, jelly].some(session => session.stats().status !== 'idle'),
+  );
 
   const ndjsonIds = createMemo(() => new Set(ndjson.items().map(item => item.id)));
   const cborIds = createMemo(() => new Set(cbor.items().map(item => item.id)));
-  const jellyIds = createMemo(() => new Set(jelly.items().map(item => item.id)));
-
-  const matchedIds = createMemo(() => {
-    const cborSet = cborIds();
-    const jellySet = jellyIds();
-    return new Set(
-      ndjson
-        .items()
-        .map(item => item.id)
-        .filter(id => cborSet.has(id) && jellySet.has(id)),
-    );
-  });
-
-  const identicalCount = createMemo(() => {
-    const cborById = new Map(cbor.items().map(item => [item.id, item.notification]));
-    const jellyById = new Map(jelly.items().map(item => [item.id, item.notification]));
-    let identical = 0;
-    for (const item of ndjson.items()) {
-      const cborCounterpart = cborById.get(item.id);
-      const jellyCounterpart = jellyById.get(item.id);
-      if (
-        cborCounterpart &&
-        jellyCounterpart &&
-        documentsEqual(item.notification, cborCounterpart) &&
-        documentsEqual(item.notification, jellyCounterpart)
-      ) {
-        identical += 1;
-      }
-    }
-    return identical;
-  });
-
-  const orderMatches = createMemo(() => {
-    const ndjsonOrder = ndjson.items().map(item => item.id);
-    const cborOrder = cbor.items().map(item => item.id);
-    const jellyOrder = jelly.items().map(item => item.id);
-    if (
-      ndjsonOrder.length !== cborOrder.length ||
-      ndjsonOrder.length !== jellyOrder.length
-    ) {
-      return null;
-    }
-    return (
-      ndjsonOrder.every((id, index) => id === cborOrder[index]) &&
-      ndjsonOrder.every((id, index) => id === jellyOrder[index])
-    );
-  });
 
   const cborReduction = createMemo(() =>
     sizeReduction(ndjson.stats().bytesReceived, cbor.stats().bytesReceived),
@@ -96,53 +44,43 @@ export default function App() {
     return left !== null && left === right ? left : null;
   });
 
-  const restart = (event?: SubmitEvent): void => {
-    event?.preventDefault();
-    const nextCount = clamp(Math.round(count()), 1, 100);
+  const startAll = (): void => {
     const nextInterval = clamp(Math.round(intervalMs()), 0, 5000);
-    setCount(nextCount);
     setIntervalMs(nextInterval);
     ndjson.start({
-      count: nextCount,
       intervalMs: nextInterval,
       inlineContext: ndjsonInlineContext(),
     });
     cbor.start({
-      count: nextCount,
       intervalMs: nextInterval,
       inlineContext: cborInlineContext(),
     });
     jelly.start({
-      count: nextCount,
       intervalMs: nextInterval,
       inlineContext: false,
     });
   };
 
-  const restartOne = (
-    session: ReturnType<typeof createStreamSession>,
-    inlineContext: boolean,
-  ): void => {
-    const nextCount = clamp(Math.round(count()), 1, 100);
-    const nextInterval = clamp(Math.round(intervalMs()), 0, 5000);
-    setCount(nextCount);
-    setIntervalMs(nextInterval);
-    session.start({ count: nextCount, intervalMs: nextInterval, inlineContext });
+  const restartAll = (event?: SubmitEvent): void => {
+    event?.preventDefault();
+    startAll();
   };
 
   const toggleNdjsonContext = (): void => {
-    const next = !ndjsonInlineContext();
-    setNdjsonInlineContext(next);
-    restartOne(ndjson, next);
+    setNdjsonInlineContext(value => !value);
+    if (isRunning()) {
+      startAll();
+    }
   };
 
   const toggleCborContext = (): void => {
-    const next = !cborInlineContext();
-    setCborInlineContext(next);
-    restartOne(cbor, next);
+    setCborInlineContext(value => !value);
+    if (isRunning()) {
+      startAll();
+    }
   };
 
-  const stopBoth = (): void => {
+  const stopAll = (): void => {
     ndjson.stop();
     cbor.stop();
     jelly.stop();
@@ -156,25 +94,17 @@ export default function App() {
           NDJSON <span>vs.</span> CBOR <span>vs.</span> Jelly
         </h1>
         <p class="lede">
-          Three concurrent HTTP streams carry the same ordered LWS notifications: compact
-          NDJSON, an RFC 8742 CBOR Sequence, and a length-delimited Jelly-RDF stream. With
-          @context off the CBOR items are plain CBOR; with @context on they are compressed
-          CBOR-LD. Every byte shown below comes from the actual response bodies.
+          Start all three HTTP streams to carry the same ordered LWS notifications:
+          compact NDJSON, an RFC 8742 CBOR Sequence, and a length-delimited Jelly-RDF
+          stream. With @context off the CBOR items are plain CBOR; with @context on they
+          are compressed CBOR-LD. Every byte shown below comes from the actual response
+          bodies. Stop aborts all three response streams, and a context change restarts
+          all three so their sequences stay aligned.
         </p>
       </header>
 
       <section class="controls" aria-label="Stream controls">
-        <form onSubmit={restart}>
-          <label>
-            Notifications
-            <input
-              type="number"
-              min="1"
-              max="100"
-              value={count()}
-              onInput={event => setCount(Number(event.currentTarget.value))}
-            />
-          </label>
+        <form onSubmit={restartAll}>
           <label>
             Interval (ms)
             <input
@@ -187,21 +117,36 @@ export default function App() {
             />
           </label>
           <button type="submit" class="primary">
-            Restart both streams
+            {hasStarted() ? 'Re-start all streams' : 'Start all streams'}
           </button>
-          <button type="button" class="secondary" onClick={stopBoth}>
-            Stop both
+          <button
+            type="button"
+            class="secondary"
+            onClick={stopAll}
+            disabled={!isRunning()}
+          >
+            Stop all streams
           </button>
         </form>
         <p class="hint">
-          The NDJSON and CBOR panels each have their own @context toggle and re-run that stream
-          immediately. Off: the context is only in the Link header. On: the context URL array is
-          inlined into every notification. Jelly-RDF has no context toggle. Use a longer interval
-          to exercise streaming and cancellation.
+          Start opens all three streams and keeps them running until you stop them.
+          Re-start aborts the current responses and opens a fresh set with the current
+          settings. Stop is available only while a stream is connecting or running; it
+          aborts every fetch so the server-side producers stop. Toggling @context while
+          streams are running reopens all three with the new mode, keeping the comparison
+          aligned. Jelly-RDF has no context toggle.
         </p>
       </section>
 
       <section class="summary" aria-label="Comparison summary">
+        <div class="summary-card summary-count">
+          <span>Count</span>
+          <strong>{ndjson.items().length}</strong>
+          <small>
+            {ndjson.items().length} NDJSON · {cbor.items().length} CBOR ·{' '}
+            {jelly.items().length} Jelly
+          </small>
+        </div>
         <div class="summary-card summary-reduction">
           <span>CBOR vs NDJSON</span>
           <strong>{formatPercent(cborReduction())}</strong>
@@ -211,29 +156,6 @@ export default function App() {
           <span>Jelly vs NDJSON</span>
           <strong>{formatPercent(jellyReduction())}</strong>
           <small>size reduction using NDJSON as baseline</small>
-        </div>
-        <div class="summary-card">
-          <span>Matched IDs</span>
-          <strong>{matchedIds().size}</strong>
-          <small>
-            {ndjson.items().length} NDJSON · {cbor.items().length} CBOR ·{' '}
-            {jelly.items().length} Jelly
-          </small>
-        </div>
-        <div class="summary-card">
-          <span>Identical payloads</span>
-          <strong>
-            {identicalCount()}/{matchedIds().size}
-          </strong>
-          <small>after removing any inlined @context</small>
-        </div>
-        <div class="summary-card">
-          <span>Same order</span>
-          <strong>{orderMatches() === null ? '…' : orderMatches() ? 'yes' : 'no'}</strong>
-          <small>
-            {formatBytes(ndjson.stats().bytesReceived)} vs{' '}
-            {formatBytes(cbor.stats().bytesReceived)}
-          </small>
         </div>
       </section>
 
@@ -290,9 +212,10 @@ export default function App() {
         <ul>
           <For
             each={[
-              'Committed generated fixtures keep both requests byte-comparable.',
+              'Committed generated fixtures keep all three requests byte-comparable.',
               'The first chunk is flushed immediately; later chunks are spaced by the interval.',
-              'Cancelling a stream aborts the fetch and stops the server-side producer.',
+              'Stopping aborts every fetch and reader, which stops each server-side producer.',
+              'Changing either @context toggle restarts all three streams from the same fixture sequence.',
               'Jelly frames are decoded to RDF/JS quads only to reconstruct the same notification fields; no RDF querying or JSON-LD expansion is performed.',
             ]}
           >

@@ -1,5 +1,5 @@
 import { serve } from '@hono/node-server';
-import { createApp, DEFAULT_COUNT, DEFAULT_INTERVAL_MS, MAX_COUNT, MAX_INTERVAL_MS } from '../src/app.ts';
+import { createApp, DEFAULT_INTERVAL_MS, MAX_INTERVAL_MS } from '../src/app.ts';
 
 function integerFromEnv(name: string, fallback: number, minimum: number, maximum: number): number {
   const raw = process.env[name];
@@ -17,7 +17,6 @@ function integerFromEnv(name: string, fallback: number, minimum: number, maximum
 }
 
 const app = createApp({
-  defaultCount: integerFromEnv('NOTIFICATION_COUNT', DEFAULT_COUNT, 1, MAX_COUNT),
   defaultIntervalMs: integerFromEnv(
     'NOTIFICATION_INTERVAL_MS',
     DEFAULT_INTERVAL_MS,

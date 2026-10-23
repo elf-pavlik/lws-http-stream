@@ -8,7 +8,7 @@ const EXCHANGES: Record<
 > = {
   ndjson: {
     link: {
-      request: `GET /notifications?count=8&interval=250&context=link HTTP/1.1
+      request: `GET /notifications?interval=250&context=link HTTP/1.1
 Accept: application/x-ndjson`,
       response: `HTTP/1.1 200 OK
 Content-Type: application/x-ndjson
@@ -18,7 +18,7 @@ Vary: Accept
 Transfer-Encoding: chunked`,
     },
     inline: {
-      request: `GET /notifications?count=8&interval=250&context=inline HTTP/1.1
+      request: `GET /notifications?interval=250&context=inline HTTP/1.1
 Accept: application/x-ndjson`,
       response: `HTTP/1.1 200 OK
 Content-Type: application/x-ndjson
@@ -29,7 +29,7 @@ Transfer-Encoding: chunked`,
   },
   'cbor-seq': {
     link: {
-      request: `GET /notifications?count=8&interval=250&context=link HTTP/1.1
+      request: `GET /notifications?interval=250&context=link HTTP/1.1
 Accept: application/cbor-seq`,
       response: `HTTP/1.1 200 OK
 Content-Type: application/cbor-seq
@@ -39,7 +39,7 @@ Vary: Accept
 Transfer-Encoding: chunked`,
     },
     inline: {
-      request: `GET /notifications?count=8&interval=250&context=inline HTTP/1.1
+      request: `GET /notifications?interval=250&context=inline HTTP/1.1
 Accept: application/cbor-seq`,
       response: `HTTP/1.1 200 OK
 Content-Type: application/cbor-seq
@@ -50,7 +50,7 @@ Transfer-Encoding: chunked`,
   },
   jelly: {
     link: {
-      request: `GET /notifications?count=8&interval=250 HTTP/1.1
+      request: `GET /notifications?interval=250 HTTP/1.1
 Accept: application/x-jelly-rdf`,
       response: `HTTP/1.1 200 OK
 Content-Type: application/x-jelly-rdf
@@ -59,7 +59,7 @@ Vary: Accept
 Transfer-Encoding: chunked`,
     },
     inline: {
-      request: `GET /notifications?count=8&interval=250 HTTP/1.1
+      request: `GET /notifications?interval=250 HTTP/1.1
 Accept: application/x-jelly-rdf`,
       response: `HTTP/1.1 200 OK
 Content-Type: application/x-jelly-rdf

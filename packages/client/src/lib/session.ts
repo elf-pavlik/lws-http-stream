@@ -1,4 +1,4 @@
-import { createSignal, onCleanup, onMount } from 'solid-js';
+import { createSignal, onCleanup } from 'solid-js';
 import { parseContextLink, requestNotificationStream } from '../api.ts';
 import { decodePlainCborItem } from './cbor.ts';
 import { decodeCborLdItem } from './cborld.ts';
@@ -8,7 +8,6 @@ import { initialStats } from './stats.ts';
 import type { ReceivedNotification, Representation, StreamStats } from './types.ts';
 
 export interface SessionOptions {
-  count: number;
   intervalMs: number;
   inlineContext: boolean;
 }
@@ -21,10 +20,7 @@ export interface StreamSession {
   stop: () => void;
 }
 
-export function createStreamSession(
-  representation: Representation,
-  initialOptions: SessionOptions,
-): StreamSession {
+export function createStreamSession(representation: Representation): StreamSession {
   const [items, setItems] = createSignal<ReceivedNotification[]>([]);
   const [stats, setStats] = createSignal<StreamStats>(initialStats(representation));
   const state = {
@@ -91,7 +87,6 @@ export function createStreamSession(
     void (async () => {
       try {
         const response = await requestNotificationStream(representation, {
-          count: options.count,
           intervalMs: options.intervalMs,
           inlineContext: options.inlineContext,
           signal: controller.signal,
@@ -195,10 +190,6 @@ export function createStreamSession(
       }
     })();
   };
-
-  onMount(() => {
-    start(initialOptions);
-  });
 
   onCleanup(() => {
     stop();

@@ -46,20 +46,6 @@ fixtures.forEach(assertNotification);
 
 export const notificationFixtures: readonly LwsNotification[] = fixtures;
 
-/**
- * Return a deterministic prefix of the fixture sequence, repeating the fixtures
- * if a longer stream is requested.
- */
-export function selectNotifications(count: number): readonly LwsNotification[] {
-  if (!Number.isInteger(count) || count < 0) {
-    throw new RangeError('count must be a non-negative integer');
-  }
-  return Array.from(
-    { length: count },
-    (_, index) => notificationFixtures[index % notificationFixtures.length]!,
-  );
-}
-
 export function getNotificationId(notification: LwsNotification): string {
   return notification.id;
 }

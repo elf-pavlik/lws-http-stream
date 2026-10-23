@@ -181,6 +181,24 @@ button:hover {
   transform: translateY(-1px);
 }
 
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+  transform: none;
+}
+
+button.primary:disabled,
+button.primary:disabled:hover {
+  background: var(--cyan);
+  color: #07221d;
+}
+
+button.secondary:disabled,
+button.secondary:disabled:hover {
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+
 button.primary {
   background: var(--cyan);
   color: #07221d;
@@ -285,7 +303,7 @@ button.context-toggle.active .context-toggle-state {
 
 .summary {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
   margin-bottom: 18px;
 }
@@ -313,6 +331,17 @@ button.context-toggle.active .context-toggle-state {
 .summary-card small {
   color: var(--faint);
   font-size: 0.7rem;
+}
+
+.summary-count {
+  border-color: rgba(245, 185, 95, 0.34);
+  background:
+    radial-gradient(circle at 100% 0%, rgba(245, 185, 95, 0.16), transparent 17rem),
+    rgba(15, 24, 42, 0.8);
+}
+
+.summary-count strong {
+  color: var(--amber);
 }
 
 .summary-reduction {
@@ -590,6 +619,7 @@ button.context-toggle.active .context-toggle-state {
 }
 
 .notification-list {
+  position: relative;
   min-height: 300px;
   max-height: 590px;
   padding: 0 12px 12px;
@@ -597,12 +627,27 @@ button.context-toggle.active .context-toggle-state {
   scrollbar-color: var(--border-strong) transparent;
 }
 
-.notification-list ol {
-  display: grid;
-  gap: 8px;
+.virtual-list {
+  position: relative;
   margin: 0;
   padding: 0;
   list-style: none;
+}
+
+.virtual-list-row {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  box-sizing: border-box;
+  padding-bottom: 8px;
+}
+
+.virtual-list-row .notification {
+  display: flex;
+  height: 100%;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .notification {
@@ -670,7 +715,9 @@ button.context-toggle.active .context-toggle-state {
 }
 
 .notification-body {
-  display: grid;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
   gap: 6px;
   margin-top: 9px;
 }
@@ -706,6 +753,7 @@ button.context-toggle.active .context-toggle-state {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
+  margin-top: auto;
   color: var(--faint);
   font-size: 0.64rem;
 }
@@ -761,10 +809,6 @@ button.context-toggle.active .context-toggle-state {
 }
 
 @media (max-width: 1250px) {
-  .summary {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-
   .panels {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
