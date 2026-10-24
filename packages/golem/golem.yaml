@@ -39,7 +39,7 @@ components:
 httpApi:
   deployments:
     local:
-      # Main server used by the UI: NDJSON from Rust, CBOR-LD from spruceid/cbor-ld.
+      # Main server used by the UI: Rust NDJSON, CBOR-LD, and Jelly-RDF.
       - domain: 127.0.0.1:8787
         scheme: http
         agents:

@@ -20,6 +20,11 @@ serde_json = "1"
 cbor-ld = { git = "https://github.com/spruceid/cbor-ld", rev = "18b8219e37baede9cfd40599a367facd06dd20f1", default-features = false }
 json-ld = "0.21.1"
 ciborium = "0.2"
+prost = "0.14"
+
+[build-dependencies]
+prost-build = "0.14"
+protoc-bin-vendored = "3"
 
 # Build the WIT bindings with Golem's forked wit-bindgen, which adds an
 # "outline-lift" optimization that shrinks the giant generated lift/lower

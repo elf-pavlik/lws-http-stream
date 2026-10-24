@@ -115,23 +115,31 @@ avoids dumping binary data into the terminal. These examples pass `count=3` so
 `curl` exits on its own; omit `count` for an infinite stream and use
 `--max-time` or a limiting consumer.
 
-## Golem variant: Rust CBOR-LD + Effect NDJSON
+## Golem variant: Rust Jelly + CBOR-LD + Effect NDJSON
 
 `packages/golem` is an independent Golem 1.6 application with two components:
 
 | Component | Domain | What it serves |
 |---|---|---|
-| `lws-http-stream-golem:rust-main` | `127.0.0.1:8787` | NDJSON, plain CBOR Sequence, CBOR-LD |
+| `lws-http-stream-golem:rust-main` | `127.0.0.1:8787` | NDJSON, plain CBOR Sequence, CBOR-LD, Jelly-RDF |
 | `lws-http-stream-golem:effect-main` | `effect.localhost:8787` | NDJSON only |
 
 The Rust router is the one the UI uses, because it owns the existing Vite proxy
 port. It serves the same `/notifications`, `/health`, and
-`/contexts/lws-notifications-v1.jsonld` paths. `application/cbor-seq` now works:
-`context=inline` produces CBOR-LD with
-[spruceid/cbor-ld](https://github.com/spruceid/cbor-ld), and `context=link`
-produces plain CBOR. Only `application/x-jelly-rdf` still returns `404`, so the
-Jelly panel shows its normal error state. The original Effect router remains
-available at `http://effect.localhost:8787/notifications` for comparison.
+`/contexts/lws-notifications-v1.jsonld` paths. All three representations now
+work:
+
+- `application/x-ndjson` → NDJSON
+- `application/cbor-seq` → CBOR-LD (`context=inline`) or plain CBOR
+  (`context=link`), using [spruceid/cbor-ld](https://github.com/spruceid/cbor-ld)
+- `application/x-jelly-rdf` → length-delimited Jelly-RDF frames
+
+The Jelly writer uses the Jelly-RDF protobuf schema from the Jelly-RDF project
+(the schema used by `jelly_rs`). Upstream `jelly_rs` currently implements
+deserialization only, so the Rust router supplies the row-layout v2 writer; its
+output is verified with both `jelly_rs` and the client's `rdfjs-jelly` parser.
+The original Effect router remains available at
+`http://effect.localhost:8787/notifications` for comparison.
 
 The local Node server and the Golem Rust router both listen on **8787**. Run one
 at a time. The manifest sets `localServer.customRequestPort: 8787`, registers the
@@ -191,9 +199,11 @@ curl -sS -o /tmp/cbor-seq.bin \
   'http://127.0.0.1:8787/notifications?count=3&interval=0&context=link' \
   -H 'Accept: application/cbor-seq'
 
-# Jelly-RDF is still not implemented
-curl -i 'http://127.0.0.1:8787/notifications?count=1&interval=0' \
+# Jelly-RDF: length-delimited frames, no newline delimiters
+curl -sS -o /tmp/jelly.bin \
+  'http://127.0.0.1:8787/notifications?count=3&interval=0' \
   -H 'Accept: application/x-jelly-rdf'
+od -An -tx1 -N 32 /tmp/jelly.bin
 
 # The original Effect router
 curl -i 'http://effect.localhost:8787/notifications?count=1&interval=0' \
@@ -204,7 +214,9 @@ The Rust HTTP router (`packages/golem/rust/src/router.rs`) uses
 `golem_rust::http_router` and `AgentStream<Vec<u8>>`; the Effect router
 (`packages/golem/src/router.ts`) uses `HttpRouter.define` and `effect/http`.
 Both exist because the UI needs the literal `/notifications` path and an
-open-ended streaming body.
+open-ended streaming body. Jelly frame construction lives in
+`packages/golem/rust/src/jelly.rs`; the RDF mapping matches
+`packages/server/src/jelly.ts`.
 
 ## API
 
@@ -313,7 +325,10 @@ serves `packages/client/dist`, with API rewrites to `api/*`.
 │   ├── golem/
 │   │   ├── fixtures/                    # copied LWS fixtures and cached contexts
 │   │   ├── rust/
-│   │   │   ├── src/router.rs            # Rust router, NDJSON + CBOR-LD
+│   │   │   ├── proto/rdf.proto          # Jelly-RDF protobuf schema
+│   │   │   ├── src/jelly.rs             # Jelly row-layout v2 writer
+│   │   │   ├── src/router.rs            # Rust router, NDJSON + CBOR + Jelly
+│   │   │   ├── build.rs                 # prost/protoc generation
 │   │   │   ├── vendor/tokio-stub/       # wasm-friendly tokio stub for cbor-ld
 │   │   │   ├── Cargo.toml
 │   │   │   └── Cargo.lock

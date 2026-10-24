@@ -1,8 +1,9 @@
-# Golem variant: Rust CBOR-LD + Effect NDJSON
+# Golem variant: Rust Jelly + CBOR-LD + Effect NDJSON
 
 A Golem 1.6 application that exposes the demo's notification stream. The main
-server is a Rust HTTP router using [spruceid/cbor-ld][cbor-ld] for CBOR-LD. The
-original TypeScript Effect router is retained on a second domain for comparison.
+server is a Rust HTTP router using [spruceid/cbor-ld][cbor-ld] for CBOR-LD and
+the Jelly-RDF protobuf schema for Jelly. The original TypeScript Effect router
+is retained on a second domain for comparison.
 
 [cbor-ld]: https://github.com/spruceid/cbor-ld
 
@@ -10,7 +11,7 @@ original TypeScript Effect router is retained on a second domain for comparison.
 
 | Component | Domain | What it serves |
 |---|---|---|
-| `lws-http-stream-golem:rust-main` | `127.0.0.1:8787` | NDJSON, plain CBOR Sequence, CBOR-LD |
+| `lws-http-stream-golem:rust-main` | `127.0.0.1:8787` | NDJSON, plain CBOR Sequence, CBOR-LD, Jelly-RDF |
 | `lws-http-stream-golem:effect-main` | `effect.localhost:8787` | NDJSON only |
 
 The Rust router is the one the UI uses, because that is the port the Vite proxy
@@ -18,15 +19,16 @@ already targets. It serves:
 
 | Path | Response |
 |---|---|
-| `GET /notifications` | NDJSON or CBOR Sequence, depending on `Accept` |
+| `GET /notifications` | NDJSON, CBOR Sequence, or Jelly-RDF, depending on `Accept` |
 | `GET /health` | JSON health document |
 | `GET /contexts/lws-notifications-v1.jsonld` | JSON-LD context document |
 | other matches | 404 |
 
 `application/cbor-seq` uses CBOR-LD when `context=inline` and plain CBOR when
-`context=link`. `application/x-jelly-rdf` is not implemented and returns `404`.
-The client's existing `@digitalbazaar/cborld` decoder decodes the spruceid
-CBOR-LD output; this was verified against all fixture notifications.
+`context=link`. `application/x-jelly-rdf` returns length-delimited Jelly-RDF
+frames. The client's existing `@digitalbazaar/cborld` decoder decodes the
+spruceid CBOR-LD output, and its `rdfjs-jelly` parser decodes the Jelly frames;
+both were verified against all fixture notifications.
 
 The Effect router remains reachable at
 `http://effect.localhost:8787/notifications`. It is the original NDJSON-only
@@ -56,6 +58,22 @@ and byte stream directly:
 - `rust/vendor/tokio-stub` exists only because `cbor-ld` declares tokio for its
   optional CLI. Its library code never uses tokio, and the stub keeps
   `rt-multi-thread` out of the `wasm32-wasip2` build.
+
+## Jelly-RDF implementation
+
+- `rust/proto/rdf.proto` is the Jelly-RDF protobuf schema from
+  [Jelly-RDF/jelly-protobuf](https://github.com/Jelly-RDF/jelly-protobuf), the
+  same schema used by `jelly_rs`.
+- Upstream `jelly_rs` currently implements deserialization only. The Rust
+  component therefore supplies the missing **row-layout protocol version 2**
+  writer in `rust/src/jelly.rs`: flat quads, one delimited frame per
+  notification, name/datatype lookup tables, and no prefix table.
+- The RDF mapping matches `packages/server/src/jelly.ts` so the client can
+  reconstruct the same notification objects.
+- The generated output was validated with `jelly_rs`'s `FrameReader` /
+  `Deserializer` and with the client's `rdfjs-jelly` browser parser.
+- `build.rs` compiles the proto with prost and a vendored `protoc`, so no system
+  protobuf compiler is required.
 
 ## Fixtures
 
@@ -116,4 +134,5 @@ npm --prefix packages/golem run test
 
 The protocol tests cover Accept negotiation, query parameter bounds, and context
 mode parsing for the Effect router. The Rust router was verified end-to-end
-against the local Golem server with both `cborg` and `@digitalbazaar/cborld`.
+against the local Golem server with `cborg`, `@digitalbazaar/cborld`, `jelly_rs`,
+and `rdfjs-jelly`.

@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::sync::{Arc, OnceLock};
 
+use crate::jelly::JellyNotificationEncoder;
 use golem_rust::agentic::{
     AgentStream, Config, Header, HttpRequest, HttpResponse, HttpRouter, spawn_local,
 };
@@ -340,24 +341,12 @@ fn invalid_context_mode() -> HttpResponse {
     )
 }
 
-fn unsupported_representation(representation: &str) -> HttpResponse {
-    json_response(
-        404,
-        json!({
-            "error": "not_implemented",
-            "representation": representation,
-            "message": "This Golem build serves NDJSON and CBOR Sequence; Jelly-RDF is not implemented yet.",
-            "supported": [NDJSON_MEDIA_TYPE, CBOR_SEQ_MEDIA_TYPE],
-        }),
-    )
-}
-
 fn not_found() -> HttpResponse {
     json_response(
         404,
         json!({
             "error": "not_found",
-            "supported": [NDJSON_MEDIA_TYPE, CBOR_SEQ_MEDIA_TYPE],
+            "supported": [NDJSON_MEDIA_TYPE, CBOR_SEQ_MEDIA_TYPE, JELLY_MEDIA_TYPE],
         }),
     )
 }
@@ -379,6 +368,7 @@ enum StreamMode {
     Ndjson { inline_context: bool },
     CborPlain,
     CborLd,
+    Jelly,
 }
 
 fn notification_stream(
@@ -389,6 +379,7 @@ fn notification_stream(
 ) -> AgentStream<Vec<u8>> {
     let (mut writer, stream) = AgentStream::new();
     let notifications = notifications();
+    let mut jelly_encoder = matches!(&mode, StreamMode::Jelly).then(JellyNotificationEncoder::new);
 
     spawn_local(async move {
         let mut index: u64 = 0;
@@ -411,6 +402,10 @@ fn notification_stream(
                         break;
                     }
                 },
+                StreamMode::Jelly => jelly_encoder
+                    .as_mut()
+                    .expect("Jelly encoder must be initialized")
+                    .add_notification(notification),
             };
 
             if writer.write_one(bytes).await.is_err() {
@@ -434,12 +429,10 @@ fn notifications_response(
 ) -> HttpResponse {
     let representation = requested_representation(accept_header(request).as_deref());
 
-    if matches!(representation, Representation::Jelly) {
-        return unsupported_representation("jelly");
-    }
     if matches!(representation, Representation::Unknown) {
         return not_found();
     }
+    let is_jelly = matches!(representation, Representation::Jelly);
 
     let count = match parse_optional_integer(query_param(request, "count"), 1, MAX_COUNT) {
         Ok(count) => count,
@@ -454,9 +447,13 @@ fn notifications_response(
         Some(interval_ms) => interval_ms,
         None => return invalid_query("interval", 0, MAX_INTERVAL_MS),
     };
-    let context_mode = match parse_context_mode(query_param(request, "context")) {
-        Some(context_mode) => context_mode,
-        None => return invalid_context_mode(),
+    let context_mode = if is_jelly {
+        ContextMode::Link
+    } else {
+        match parse_context_mode(query_param(request, "context")) {
+            Some(context_mode) => context_mode,
+            None => return invalid_context_mode(),
+        }
     };
 
     let (content_type, mode) = match representation {
@@ -474,7 +471,8 @@ fn notifications_response(
                 StreamMode::CborPlain
             },
         ),
-        Representation::Jelly | Representation::Unknown => unreachable!(),
+        Representation::Jelly => (JELLY_MEDIA_TYPE, StreamMode::Jelly),
+        Representation::Unknown => unreachable!(),
     };
 
     let mut headers = vec![
@@ -484,7 +482,7 @@ fn notifications_response(
         header("x-content-type-options", "nosniff"),
         header("access-control-expose-headers", "Link"),
     ];
-    if !context_mode.is_inline() {
+    if !is_jelly && !context_mode.is_inline() {
         headers.push(header("link", &context_link(request)));
     }
 
@@ -501,13 +499,14 @@ fn health_response() -> HttpResponse {
         json!({
             "status": "ok",
             "service": "lws-stream-golem-rust",
-            "representations": ["ndjson", "cbor-seq"],
-            "mediaTypes": [NDJSON_MEDIA_TYPE, CBOR_SEQ_MEDIA_TYPE],
-            "unsupportedMediaTypes": [JELLY_MEDIA_TYPE],
+            "representations": ["ndjson", "cbor-seq", "jelly"],
+            "mediaTypes": [NDJSON_MEDIA_TYPE, CBOR_SEQ_MEDIA_TYPE, JELLY_MEDIA_TYPE],
+            "unsupportedMediaTypes": [],
             "defaultRepresentation": "ndjson",
             "contextModes": ["link", "inline"],
             "defaultContextMode": "link",
             "cborLd": true,
+            "jelly": true,
         }),
     )
 }
