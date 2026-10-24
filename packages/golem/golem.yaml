@@ -5,7 +5,7 @@
 
 manifestVersion: 1.6.0
 
-app: lws-http-stream-golem
+app: lws-http-stream
 
 version:
   git:
@@ -16,11 +16,13 @@ version:
 environments:
   local:
     server: local
+    componentPresets: debug
     version:
       git:
         allowDirty: true
   cloud:
     server: cloud
+    componentPresets: release
     deployment:
       versionCheck: true
 
@@ -29,10 +31,7 @@ localServer:
   customRequestPort: 8787
 
 components:
-  lws-http-stream-golem:effect-main:
-    dir: ""
-    templates: effect
-  lws-http-stream-golem:rust-main:
+  lws-http-stream:rust-main:
     dir: "rust"
     templates: rust
 
@@ -44,8 +43,3 @@ httpApi:
         scheme: http
         agents:
           LwsRouter: {}
-      # The original Effect implementation remains available for comparison.
-      - domain: effect.localhost:8787
-        scheme: http
-        agents:
-          LwsNotificationsRouter: {}

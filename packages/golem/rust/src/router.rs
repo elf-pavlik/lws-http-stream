@@ -498,7 +498,7 @@ fn health_response() -> HttpResponse {
         200,
         json!({
             "status": "ok",
-            "service": "lws-stream-golem-rust",
+            "service": "lws-http-stream-rust",
             "representations": ["ndjson", "cbor-seq", "jelly"],
             "mediaTypes": [NDJSON_MEDIA_TYPE, CBOR_SEQ_MEDIA_TYPE, JELLY_MEDIA_TYPE],
             "unsupportedMediaTypes": [],

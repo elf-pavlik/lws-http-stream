@@ -1,21 +1,24 @@
-# Golem variant: Rust Jelly + CBOR-LD + Effect NDJSON
+# Golem variant: Rust NDJSON, CBOR-LD, and Jelly-RDF
 
-A Golem 1.6 application that exposes the demo's notification stream. The main
-server is a Rust HTTP router using [spruceid/cbor-ld][cbor-ld] for CBOR-LD and
-the Jelly-RDF protobuf schema for Jelly. The original TypeScript Effect router
-is retained on a second domain for comparison.
+A Golem 1.6 application that exposes the demo's notification stream through a
+Rust HTTP router. It is the only Golem component in this package: there is no
+Effect/TypeScript implementation and no npm dependency tree here.
+
+The Rust router uses:
+
+- [spruceid/cbor-ld][cbor-ld] for CBOR-LD
+- the Jelly-RDF protobuf schema for Jelly-RDF
+- `golem_rust::http_router` with `AgentStream<Vec<u8>>` for streaming
 
 [cbor-ld]: https://github.com/spruceid/cbor-ld
 
-## Components
+## Component
 
 | Component | Domain | What it serves |
 |---|---|---|
-| `lws-http-stream-golem:rust-main` | `127.0.0.1:8787` | NDJSON, plain CBOR Sequence, CBOR-LD, Jelly-RDF |
-| `lws-http-stream-golem:effect-main` | `effect.localhost:8787` | NDJSON only |
+| `lws-http-stream:rust-main` | `127.0.0.1:8787` | NDJSON, plain CBOR Sequence, CBOR-LD, Jelly-RDF |
 
-The Rust router is the one the UI uses, because that is the port the Vite proxy
-already targets. It serves:
+Routes:
 
 | Path | Response |
 |---|---|
@@ -26,24 +29,14 @@ already targets. It serves:
 
 `application/cbor-seq` uses CBOR-LD when `context=inline` and plain CBOR when
 `context=link`. `application/x-jelly-rdf` returns length-delimited Jelly-RDF
-frames. The client's existing `@digitalbazaar/cborld` decoder decodes the
-spruceid CBOR-LD output, and its `rdfjs-jelly` parser decodes the Jelly frames;
-both were verified against all fixture notifications.
-
-The Effect router remains reachable at
-`http://effect.localhost:8787/notifications`. It is the original NDJSON-only
-implementation and is useful for comparing the two SDK approaches.
+frames.
 
 ## Why a custom HTTP router?
 
 Golem code-first agent methods map typed inputs and outputs to HTTP responses,
 but the existing UI expects the literal `/notifications` path and an open-ended
-streaming response body. Custom routers own the status, headers, content type,
-and byte stream directly:
-
-- `packages/golem/rust/src/router.rs` uses `golem_rust::http_router` with
-  `AgentStream<Vec<u8>>`.
-- `packages/golem/src/router.ts` uses `HttpRouter.define` with `effect/http`.
+streaming response body. `rust/src/router.rs` owns the status, headers, content
+type, and byte stream directly.
 
 ## CBOR-LD implementation
 
@@ -78,7 +71,7 @@ and byte stream directly:
 ## Fixtures
 
 The files under `fixtures/` are copies of `packages/server/fixtures`; Golem
-bundles each component from this directory. The root `npm run generate:fixtures`
+bundles the component from this directory. The root `npm run generate:fixtures`
 script copies the notification, public context, and cached context files here
 automatically.
 
@@ -89,50 +82,68 @@ Requirements:
 - The full `golem` binary with the built-in local server (`golem server run`).
   The `golem-cli` binary can build and deploy but cannot start the local server.
   Set `GOLEM_BIN` to the full binary path.
-- A Rust toolchain with the `wasm32-wasip2` target on `PATH`, for the Rust
-  component:
+- A Rust toolchain with the `wasm32-wasip2` target on `PATH`:
   ```bash
   rustup target add wasm32-wasip2
   ```
-  Or use Devbox: `devbox shell` installs Node 24, rustup, and the
-  `wasm32-wasip2` target from the repo's `devbox.json`. From that shell,
-  `devbox run -- npm run golem:deploy` also works.
-- `npm --prefix packages/golem install` (also run by the root `postinstall`).
-  The root `golem:build` and `golem:deploy` scripts use the repository's
-  `./golem` CLI by default; set `GOLEM_BIN` to use another binary.
+  Or use Devbox: `devbox shell` installs rustup and the `wasm32-wasip2` target
+  from the repo's `devbox.json`.
 
 The manifest fixes the local custom request port to 8787, matching the Vite
 proxy. The Node server also uses 8787; run only one of them at a time.
+
+From the repository root:
 
 ```bash
 # Terminal 1
 GOLEM_BIN=/path/to/golem npm run golem:server
 
-# Terminal 2 — builds both the Rust and Effect components, then deploys
+# Terminal 2 — builds the Rust component, then deploys
 npm run golem:deploy
 
 # Terminal 3
 npm run dev:client
 ```
 
-After the Golem server is running, `npm run dev:golem` deploys and starts the
-Vite client in one step.
+Or after the Golem server is running:
 
-The Vite proxy uses `changeOrigin: true` so the upstream `Host` header matches
-the Golem deployment domain (`127.0.0.1:8787`). The JSON-LD `Link` target is
-absolute and points at the Golem custom request port.
+```bash
+npm run dev:golem
+```
 
-The `golem build` command also writes local agent skills to `.agents` and
-`AGENTS.md`; those generated files are ignored by git.
+The root scripts use the repository's `./golem` CLI for build/deploy by default;
+set `GOLEM_BIN` to use another binary. The Vite proxy uses `changeOrigin: true`
+so the upstream `Host` header matches `127.0.0.1:8787`.
+
+The build writes local agent skills to `.agents` and `AGENTS.md`; those generated
+files are ignored by git.
+
+## Deploy the Rust server to Golem Cloud
+
+`golem.cloud.yaml` is a cloud-only manifest containing only
+`lws-http-stream:rust-main`. It exposes the Rust router at
+`https://lws-http-stream.apps.golem.cloud` (change the `subdomain` if taken).
+
+From the repository root:
+
+```bash
+# Authenticate once (GitHub OAuth2)
+./golem -C account get
+
+# Commit tracked changes first; cloud deploys reject dirty trees
+npm run golem:deploy:cloud
+```
+
+The cloud manifest has `versionCheck: true`, so each deployment must use a new
+git commit/version. The local Vite client still points at `127.0.0.1:8787`; use
+the cloud URL directly with `curl`, or change the Vite proxy target to test the
+UI against cloud.
 
 ## Checks
 
 ```bash
-npm --prefix packages/golem run typecheck
-npm --prefix packages/golem run test
+devbox run -- sh -c 'cd packages/golem/rust && cargo fmt --check'
+devbox run -- npm run golem:build
 ```
 
-The protocol tests cover Accept negotiation, query parameter bounds, and context
-mode parsing for the Effect router. The Rust router was verified end-to-end
-against the local Golem server with `cborg`, `@digitalbazaar/cborld`, `jelly_rs`,
-and `rdfjs-jelly`.
+No npm install is required inside `packages/golem`.

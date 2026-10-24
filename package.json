@@ -20,8 +20,8 @@
     "generate:fixtures": "npm run generate:fixtures -w @lws-stream/server && cp packages/server/fixtures/notifications.json packages/golem/fixtures/notifications.json && cp packages/server/fixtures/contexts/lws-notifications-v1.json packages/golem/fixtures/contexts/lws-notifications-v1.json && cp packages/server/fixtures/contexts/cached-context.json packages/golem/fixtures/contexts/cached-context.json",
     "build:client": "npm run build -w @lws-stream/client",
     "build": "npm run build:client && npm run typecheck",
-    "typecheck": "tsc -p tsconfig.json && npm run typecheck -w @lws-stream/server && npm run typecheck -w @lws-stream/client && npm --prefix packages/golem run typecheck",
-    "test": "npm run test -w @lws-stream/server && npm run test -w @lws-stream/client && npm --prefix packages/golem run test",
+    "typecheck": "tsc -p tsconfig.json && npm run typecheck -w @lws-stream/server && npm run typecheck -w @lws-stream/client",
+    "test": "npm run test -w @lws-stream/server && npm run test -w @lws-stream/client",
     "deploy:cloudflare": "npm run build:client && wrangler deploy",
     "deploy:vercel": "npm run build:client && vercel deploy --prod",
     "preview:cloudflare": "npm run build:client && wrangler dev",
@@ -29,11 +29,10 @@
     "smoke:vercel": "node scripts/smoke-vercel.mjs",
     "smoke:adapters": "node scripts/smoke-adapters.mjs",
     "dev:golem": "npm run golem:deploy && npm run dev:client",
-    "golem:server": "npm --prefix packages/golem run server",
-    "golem:build": "GOLEM_BIN=${GOLEM_BIN:-$PWD/golem} npm --prefix packages/golem run build",
-    "golem:deploy": "GOLEM_BIN=${GOLEM_BIN:-$PWD/golem} npm --prefix packages/golem run deploy",
-    "golem:install": "npm --prefix packages/golem install",
-    "postinstall": "npm --prefix packages/golem install --no-audit --no-fund"
+    "golem:server": "\"${GOLEM_BIN:-$PWD/golem}\" -A packages/golem/golem.yaml server run",
+    "golem:build": "\"${GOLEM_BIN:-$PWD/golem}\" -A packages/golem/golem.yaml build -L -Y",
+    "golem:deploy": "\"${GOLEM_BIN:-$PWD/golem}\" -A packages/golem/golem.yaml deploy -L -Y",
+    "golem:deploy:cloud": "\"${GOLEM_BIN:-$PWD/golem}\" -A packages/golem/golem.cloud.yaml deploy -C -Y"
   },
   "devDependencies": {
     "@types/node": "^24.19.2",

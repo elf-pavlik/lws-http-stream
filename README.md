@@ -115,19 +115,18 @@ avoids dumping binary data into the terminal. These examples pass `count=3` so
 `curl` exits on its own; omit `count` for an infinite stream and use
 `--max-time` or a limiting consumer.
 
-## Golem variant: Rust Jelly + CBOR-LD + Effect NDJSON
+## Golem variant: Rust NDJSON, CBOR-LD, and Jelly-RDF
 
-`packages/golem` is an independent Golem 1.6 application with two components:
+`packages/golem` is an independent Golem 1.6 application with one Rust
+component:
 
 | Component | Domain | What it serves |
 |---|---|---|
-| `lws-http-stream-golem:rust-main` | `127.0.0.1:8787` | NDJSON, plain CBOR Sequence, CBOR-LD, Jelly-RDF |
-| `lws-http-stream-golem:effect-main` | `effect.localhost:8787` | NDJSON only |
+| `lws-http-stream:rust-main` | `127.0.0.1:8787` | NDJSON, plain CBOR Sequence, CBOR-LD, Jelly-RDF |
 
-The Rust router is the one the UI uses, because it owns the existing Vite proxy
-port. It serves the same `/notifications`, `/health`, and
-`/contexts/lws-notifications-v1.jsonld` paths. All three representations now
-work:
+The Rust router owns the existing Vite proxy port and serves the same
+`/notifications`, `/health`, and `/contexts/lws-notifications-v1.jsonld` paths
+as the Node server. All three representations work:
 
 - `application/x-ndjson` → NDJSON
 - `application/cbor-seq` → CBOR-LD (`context=inline`) or plain CBOR
@@ -138,13 +137,10 @@ The Jelly writer uses the Jelly-RDF protobuf schema from the Jelly-RDF project
 (the schema used by `jelly_rs`). Upstream `jelly_rs` currently implements
 deserialization only, so the Rust router supplies the row-layout v2 writer; its
 output is verified with both `jelly_rs` and the client's `rdfjs-jelly` parser.
-The original Effect router remains available at
-`http://effect.localhost:8787/notifications` for comparison.
 
 The local Node server and the Golem Rust router both listen on **8787**. Run one
-at a time. The manifest sets `localServer.customRequestPort: 8787`, registers the
-Rust deployment at `127.0.0.1:8787`, and registers the Effect deployment at
-`effect.localhost:8787`.
+at a time. The manifest sets `localServer.customRequestPort: 8787` and registers
+the Rust deployment at `127.0.0.1:8787`.
 
 ### Requirements
 
@@ -160,8 +156,7 @@ Rust deployment at `127.0.0.1:8787`, and registers the Effect deployment at
   ```
   Or use Devbox: `devbox shell` installs Node 24, rustup, and the
   `wasm32-wasip2` target from the repo's `devbox.json`.
-- The root `postinstall` installs the Golem package dependencies in its own
-  `packages/golem/node_modules`; run `npm run golem:install` if you skipped it.
+- No npm install is needed inside `packages/golem`; it has no npm dependencies.
 
 ### Run
 
@@ -169,7 +164,7 @@ Rust deployment at `127.0.0.1:8787`, and registers the Effect deployment at
 # Terminal 1: local Golem server (custom request port from golem.yaml = 8787)
 GOLEM_BIN=/path/to/golem npm run golem:server
 
-# Terminal 2: build both components and deploy to the local server
+# Terminal 2: build the Rust component and deploy it
 npm run golem:deploy
 
 # Terminal 3: Vite client only; do not run `npm run dev`, which starts the
@@ -204,19 +199,51 @@ curl -sS -o /tmp/jelly.bin \
   'http://127.0.0.1:8787/notifications?count=3&interval=0' \
   -H 'Accept: application/x-jelly-rdf'
 od -An -tx1 -N 32 /tmp/jelly.bin
-
-# The original Effect router
-curl -i 'http://effect.localhost:8787/notifications?count=1&interval=0' \
-  -H 'Accept: application/x-ndjson'
 ```
 
 The Rust HTTP router (`packages/golem/rust/src/router.rs`) uses
-`golem_rust::http_router` and `AgentStream<Vec<u8>>`; the Effect router
-(`packages/golem/src/router.ts`) uses `HttpRouter.define` and `effect/http`.
-Both exist because the UI needs the literal `/notifications` path and an
-open-ended streaming body. Jelly frame construction lives in
-`packages/golem/rust/src/jelly.rs`; the RDF mapping matches
+`golem_rust::http_router` and `AgentStream<Vec<u8>>`. Jelly frame construction
+lives in `packages/golem/rust/src/jelly.rs`; the RDF mapping matches
 `packages/server/src/jelly.ts`.
+
+### Deploy the Rust server to Golem Cloud
+
+`packages/golem/golem.cloud.yaml` is a cloud-only manifest that deploys only the
+Rust server component and exposes it at
+`https://lws-http-stream.apps.golem.cloud`.
+
+Authenticate once (GitHub OAuth2):
+
+```bash
+./golem -C account get
+```
+
+Cloud deployments reject uncommitted tracked changes and `versionCheck: true`
+rejects reusing a version, so commit first and bump the version for each cloud
+deploy. Then:
+
+```bash
+npm run golem:deploy:cloud
+```
+
+The URL comes from the `subdomain` in `golem.cloud.yaml`; change it if
+`lws-http-stream` is already taken. Verify:
+
+```bash
+curl -i https://lws-http-stream.apps.golem.cloud/health
+curl -N 'https://lws-http-stream.apps.golem.cloud/notifications?interval=500' \
+  -H 'Accept: application/x-ndjson'
+curl -N 'https://lws-http-stream.apps.golem.cloud/notifications?interval=500&context=inline' \
+  -H 'Accept: application/cbor-seq'
+curl -sS -o /tmp/cloud.jelly \
+  'https://lws-http-stream.apps.golem.cloud/notifications?count=3&interval=0' \
+  -H 'Accept: application/x-jelly-rdf'
+```
+
+The Vite client uses relative URLs, so it keeps talking to the local server by
+default. To use the cloud server, point the Vite proxy targets in
+`packages/client/vite.config.ts` at the cloud host, or deploy the client
+separately behind the same origin.
 
 ## API
 
@@ -332,12 +359,8 @@ serves `packages/client/dist`, with API rewrites to `api/*`.
 │   │   │   ├── vendor/tokio-stub/       # wasm-friendly tokio stub for cbor-ld
 │   │   │   ├── Cargo.toml
 │   │   │   └── Cargo.lock
-│   │   ├── src/                         # Effect router on effect.localhost
-│   │   │   ├── main.ts
-│   │   │   ├── notifications.ts
-│   │   │   ├── protocol.ts
-│   │   │   └── router.ts
-│   │   └── golem.yaml                   # local custom request port 8787
+│   │   ├── golem.yaml                   # local custom request port 8787
+│   │   └── golem.cloud.yaml             # cloud-only Rust deployment
 │   └── client/
 │       ├── src/
 │       │   ├── api.ts
@@ -636,10 +659,10 @@ the generator only when you intentionally want new random identifiers.
 | `npm run generate:fixtures` | Regenerate notification IDs and paths, and sync the Golem fixtures |
 | `npm run dev:server` | `node --watch` the TypeScript server |
 | `npm run dev:client` | Start Vite |
-| `npm run build` | Build client and type-check server + client + Golem + root API |
+| `npm run build` | Build client and type-check server + client + root API |
 | `npm run build:client` | Build only the Solid client |
-| `npm run typecheck` | Type-check all TypeScript packages (including Golem) and API entry points |
-| `npm test` | Run server, client, and Golem protocol tests |
+| `npm run typecheck` | Type-check all TypeScript packages and API entry points |
+| `npm test` | Run server and client unit/integration tests |
 | `npm run smoke:adapters` | Invoke Cloudflare and Vercel adapters with Web Requests |
 | `npm run smoke:cloudflare` | Build, start `wrangler dev` in workerd, verify all three streams |
 | `npm run smoke:vercel` | Build production Vercel output and invoke the built function |
@@ -648,9 +671,9 @@ the generator only when you intentionally want new random identifiers.
 | `npm run preview:cloudflare` | Build client and run local `wrangler dev` |
 | `npm run dev:golem` | Deploy the Golem app and start the Vite client |
 | `npm run golem:server` | Start the local Golem server on custom request port 8787 |
-| `npm run golem:build` | Build the Golem Effect and Rust components |
-| `npm run golem:deploy` | Build and deploy both Golem components to the local server |
-| `npm run golem:install` | Install `packages/golem` dependencies |
+| `npm run golem:build` | Build the Rust Golem component |
+| `npm run golem:deploy` | Build and deploy the Rust Golem component locally |
+| `npm run golem:deploy:cloud` | Deploy the Rust server component to Golem Cloud |
 
 Server environment variables (Node adapter only):
 

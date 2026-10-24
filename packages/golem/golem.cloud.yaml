@@ -1,0 +1,37 @@
+# Cloud-only manifest for the Rust HTTP server.
+#
+# Use:
+#   golem deploy -A golem.cloud.yaml -C -Y
+#
+# This deploys only lws-http-stream:rust-main. The local Node server is not part
+# of this deployment.
+#
+# Change `subdomain` if lws-http-stream is already taken on Golem Cloud.
+manifestVersion: 1.6.0
+
+app: lws-http-stream
+
+version:
+  git:
+    tagPattern: "v*"
+    hashFallback: true
+    staticFallback: "v0.0.0"
+
+environments:
+  cloud:
+    server: cloud
+    componentPresets: release
+    deployment:
+      versionCheck: true
+
+components:
+  lws-http-stream:rust-main:
+    dir: "rust"
+    templates: rust
+
+httpApi:
+  deployments:
+    cloud:
+      - subdomain: lws-http-stream
+        agents:
+          LwsRouter: {}

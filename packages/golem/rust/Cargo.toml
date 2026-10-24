@@ -1,5 +1,5 @@
 [package]
-name = "lws_http_stream_golem_rust_main"
+name = "lws_http_stream_rust_main"
 version = "0.0.1"
 edition = "2024"
 
