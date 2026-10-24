@@ -1,0 +1,31 @@
+{
+  "name": "@lws-stream/golem",
+  "version": "0.1.0",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "description": "Golem Effect HTTP router streaming the LWS notification fixtures as NDJSON",
+  "scripts": {
+    "build": "${GOLEM_BIN:-golem} build -L -Y",
+    "deploy": "${GOLEM_BIN:-golem} deploy -L -Y",
+    "dev": "npm run build && npm run deploy",
+    "server": "${GOLEM_BIN:-golem} server run",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@golemcloud/effect-golem": "2.0.0",
+    "effect": "4.0.0"
+  },
+  "devDependencies": {
+    "@rollup/plugin-commonjs": "^28.0.6",
+    "@rollup/plugin-json": "^6.1.0",
+    "@rollup/plugin-node-resolve": "^16.0.1",
+    "@rollup/plugin-typescript": "^12.1.4",
+    "@types/node": "^24.19.2",
+    "rollup": "^4.50.1",
+    "tslib": "^2.8.1",
+    "typescript": "^5.9.3",
+    "vitest": "^5.0.5"
+  }
+}

@@ -1,0 +1,42 @@
+# Schema for IDEA:
+# $schema: https://schema.golem.cloud/app/golem/1.6.0/golem.schema.json
+# Schema for vscode-yaml:
+# yaml-language-server: $schema=https://schema.golem.cloud/app/golem/1.6.0/golem.schema.json
+
+manifestVersion: 1.6.0
+
+app: lws-http-stream-golem
+
+version:
+  git:
+    tagPattern: "v*"
+    hashFallback: true
+    staticFallback: "v0.0.0"
+
+environments:
+  local:
+    server: local
+    version:
+      git:
+        allowDirty: true
+  cloud:
+    server: cloud
+    deployment:
+      versionCheck: true
+
+# The local Node server also listens on 8787, so run only one of them at a time.
+localServer:
+  customRequestPort: 8787
+
+components:
+  lws-http-stream-golem:effect-main:
+    dir: ""
+    templates: effect
+
+httpApi:
+  deployments:
+    local:
+      - domain: 127.0.0.1:8787
+        scheme: http
+        agents:
+          LwsNotificationsRouter: {}

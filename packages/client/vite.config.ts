@@ -7,15 +7,15 @@ const devPort = Number(process.env.PORT ?? 5173);
 const proxy = {
   '/notifications': {
     target: 'http://127.0.0.1:8787',
-    changeOrigin: false,
+    changeOrigin: true,
   },
   '/health': {
     target: 'http://127.0.0.1:8787',
-    changeOrigin: false,
+    changeOrigin: true,
   },
   '/contexts': {
     target: 'http://127.0.0.1:8787',
-    changeOrigin: false,
+    changeOrigin: true,
   },
 } as const;
 

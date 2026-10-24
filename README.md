@@ -113,6 +113,61 @@ avoids dumping binary data into the terminal. These examples pass `count=3` so
 `curl` exits on its own; omit `count` for an infinite stream and use
 `--max-time` or a limiting consumer.
 
+## Golem Effect variant
+
+`packages/golem` is an independent Golem 1.6 application that exposes the same
+`/notifications`, `/health`, and `/contexts/lws-notifications-v1.jsonld` paths
+through a Golem Effect HTTP router. It currently implements NDJSON only:
+`application/cbor-seq` and `application/x-jelly-rdf` return `404` with a JSON
+error, so the CBOR and Jelly panels in the existing UI show their normal error
+state while the NDJSON panel streams.
+
+The local Node server and the Golem router both listen on **8787**. Run one at a
+time. The Golem manifest sets `localServer.customRequestPort: 8787` and registers
+the deployment at `127.0.0.1:8787`, so the existing Vite proxy keeps working.
+
+### Requirements
+
+- The full `golem` binary with the built-in local server. The `./golem` file in
+  this repository root is the `golem-cli` binary; it can build and deploy but
+  does not implement `golem server run`. Download the
+  `golem-x86_64-unknown-linux-gnu` asset from the Golem v1.6.0 release, or point
+  `GOLEM_BIN` at an existing full binary.
+- The root `postinstall` installs the Golem package dependencies in its own
+  `packages/golem/node_modules`; run `npm run golem:install` if you skipped it.
+
+### Run
+
+```bash
+# Terminal 1: local Golem server (custom request port from golem.yaml = 8787)
+GOLEM_BIN=/path/to/golem npm run golem:server
+
+# Terminal 2: build and deploy to the local server
+npm run golem:deploy
+
+# Terminal 3: Vite client only; do not run `npm run dev`, which starts the
+# Node server on 8787 as well
+npm run dev:client
+```
+
+After the server is running, `npm run dev:golem` performs the deploy and starts
+the Vite client in one step. The `golem:build` and `golem:deploy` scripts use the
+repository's `./golem` CLI by default; set `GOLEM_BIN` to use another binary.
+
+Test the Golem routes directly or through the Vite proxy:
+
+```bash
+curl -i 'http://127.0.0.1:8787/notifications?count=3&interval=0' \
+  -H 'Accept: application/x-ndjson'
+curl -i 'http://127.0.0.1:8787/notifications?count=1&interval=0' \
+  -H 'Accept: application/cbor-seq'   # 404
+curl -i 'http://127.0.0.1:8787/health'
+```
+
+Golem serves the route from a custom HTTP router (`HttpRouter.define` in
+`packages/golem/src/router.ts`) because the existing UI needs the literal
+`/notifications` path and a streaming response body.
+
 ## API
 
 ### `GET /notifications?interval=250`
@@ -217,6 +272,14 @@ serves `packages/client/dist`, with API rewrites to `api/*`.
 │   │       ├── negotiation.ts
 │   │       ├── notifications.ts
 │   │       └── stream.ts
+│   ├── golem/
+│   │   ├── fixtures/                    # copied LWS fixtures
+│   │   ├── src/
+│   │   │   ├── main.ts
+│   │   │   ├── notifications.ts
+│   │   │   ├── protocol.ts
+│   │   │   └── router.ts
+│   │   └── golem.yaml                   # local custom request port 8787
 │   └── client/
 │       ├── src/
 │       │   ├── api.ts
@@ -512,19 +575,24 @@ the generator only when you intentionally want new random identifiers.
 | Script | Purpose |
 |---|---|
 | `npm run dev` | Start Node server and Vite client together |
-| `npm run generate:fixtures` | Regenerate notification IDs and paths |
+| `npm run generate:fixtures` | Regenerate notification IDs and paths, and sync the Golem fixtures |
 | `npm run dev:server` | `node --watch` the TypeScript server |
 | `npm run dev:client` | Start Vite |
-| `npm run build` | Build client and type-check server + client + root API |
+| `npm run build` | Build client and type-check server + client + Golem + root API |
 | `npm run build:client` | Build only the Solid client |
-| `npm run typecheck` | Type-check all TypeScript packages and API entry points |
-| `npm test` | Run server and client unit/integration tests |
+| `npm run typecheck` | Type-check all TypeScript packages (including Golem) and API entry points |
+| `npm test` | Run server, client, and Golem protocol tests |
 | `npm run smoke:adapters` | Invoke Cloudflare and Vercel adapters with Web Requests |
 | `npm run smoke:cloudflare` | Build, start `wrangler dev` in workerd, verify all three streams |
 | `npm run smoke:vercel` | Build production Vercel output and invoke the built function |
 | `npm run deploy:cloudflare` | Build client and run `wrangler deploy` |
 | `npm run deploy:vercel` | Build client and run `vercel deploy --prod` |
 | `npm run preview:cloudflare` | Build client and run local `wrangler dev` |
+| `npm run dev:golem` | Deploy the Golem app and start the Vite client |
+| `npm run golem:server` | Start the local Golem server on custom request port 8787 |
+| `npm run golem:build` | Build the Golem Effect component |
+| `npm run golem:deploy` | Build and deploy the Golem app to the local server |
+| `npm run golem:install` | Install `packages/golem` dependencies |
 
 Server environment variables (Node adapter only):
 
@@ -538,9 +606,10 @@ configuration to those adapters.
 ## Local development details
 
 `packages/server/adapters/node.ts` uses `@hono/node-server` and executes the
-shared Hono app. The Vite proxy preserves the browser Host (`changeOrigin:
-false`), so the context URL in the Link header uses the client-visible origin
-(`http://localhost:5173`). The client displays that URL but does not fetch it.
+shared Hono app. The Vite proxy uses `changeOrigin: true`, so the upstream Host
+is `127.0.0.1:8787`. The Node server builds the context URL in the Link header
+from that host; the Golem deployment also needs the Host to match its registered
+domain (`127.0.0.1:8787`). The client displays the URL but does not fetch it.
 
 If you change the server port, update the Vite proxy targets in
 `packages/client/vite.config.ts` or set `PORT` and keep the proxy in sync.
