@@ -68,4 +68,25 @@ describe('notification URLs', () => {
       }),
     ).toBe('/notifications?interval=250');
   });
+
+  it('prefixes the selected deployment base URL', () => {
+    expect(
+      notificationsUrl({
+        baseUrl: 'https://lws-http-stream.apps.golem.cloud',
+        intervalMs: 500,
+        inlineContext: true,
+        representation: 'cbor-seq',
+      }),
+    ).toBe(
+      'https://lws-http-stream.apps.golem.cloud/notifications?interval=500&context=inline',
+    );
+    expect(
+      notificationsUrl({
+        baseUrl: 'https://lws-http-stream.vercel.app/',
+        intervalMs: 0,
+        inlineContext: false,
+        representation: 'ndjson',
+      }),
+    ).toBe('https://lws-http-stream.vercel.app/notifications?interval=0&context=link');
+  });
 });

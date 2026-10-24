@@ -8,6 +8,7 @@ import { initialStats } from './stats.ts';
 import type { ReceivedNotification, Representation, StreamStats } from './types.ts';
 
 export interface SessionOptions {
+  baseUrl: string;
   intervalMs: number;
   inlineContext: boolean;
 }
@@ -87,6 +88,7 @@ export function createStreamSession(representation: Representation): StreamSessi
     void (async () => {
       try {
         const response = await requestNotificationStream(representation, {
+          baseUrl: options.baseUrl,
           intervalMs: options.intervalMs,
           inlineContext: options.inlineContext,
           signal: controller.signal,

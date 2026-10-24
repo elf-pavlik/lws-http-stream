@@ -1,0 +1,22 @@
+# `vercel deploy` uploads the local working tree and only honors this file
+# (plus a small built-in list: node_modules, .git, .vercel, ...).
+# It does NOT read .gitignore, so gitignored build artifacts/toolchains
+# were being uploaded (~77k files / 7.3 GB) and the deployment manifest
+# exceeded the 10 MB request-body limit.
+
+# Local toolchains and build artifacts (mirror of .gitignore)
+.devbox/
+.direnv/
+.wrangler/
+coverage/
+dist/
+*.log
+.DS_Store
+.vercel
+
+# Local Golem binary (~138 MB)
+golem
+
+# Golem/Rust variant is not deployed to Vercel.
+# packages/golem/rust/target alone is ~4.7 GB / ~10.7k files.
+packages/golem/

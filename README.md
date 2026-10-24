@@ -73,11 +73,17 @@ local development.
 
 The server defaults to a 250 ms interval. The client uses a 500 ms interval and
 streams indefinitely until you press **Stop all streams**; it does not start
-until you press **Start all streams**. While a stream is running, the same
-button becomes **Re-start all streams**, and **Stop all streams** aborts every
-response body. The NDJSON and CBOR panels each have their own `@context`
-toggle; toggling either one restarts all three streams so their sequences stay
-aligned. The Jelly stream is independent of the context mode.
+until you press **Start all streams**. The backend picker above the interval
+control switches between the local server, Cloudflare, Vercel, and Golem Cloud.
+The local option only appears on localhost; on the Cloudflare (`*.workers.dev`)
+and Vercel (`*.vercel.app`) deployments the matching backend is preselected and
+called through the same origin, so preview URLs use their own functions instead
+of production. Switching while streams are running restarts all three against
+the selected deployment. While a stream is running, the start button becomes **Re-start all
+streams**, and **Stop all streams** aborts every response body. The NDJSON and
+CBOR panels each have their own `@context` toggle; toggling either one restarts
+all three streams so their sequences stay aligned. The Jelly stream is
+independent of the context mode.
 
 ### Get all three representations with curl
 

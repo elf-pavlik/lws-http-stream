@@ -9,12 +9,14 @@ export const MEDIA_TYPES: Readonly<Record<Representation, string>> = {
 const JSON_LD_CONTEXT_REL = 'http://www.w3.org/ns/json-ld#context';
 
 export interface StreamRequestOptions {
+  baseUrl: string;
   intervalMs: number;
   inlineContext: boolean;
   signal: AbortSignal;
 }
 
 export function notificationsUrl(options: {
+  baseUrl?: string;
   intervalMs: number;
   inlineContext: boolean;
   representation?: Representation;
@@ -25,7 +27,9 @@ export function notificationsUrl(options: {
   if (options.representation !== 'jelly') {
     params.set('context', options.inlineContext ? 'inline' : 'link');
   }
-  return `/notifications?${params.toString()}`;
+  const path = `/notifications?${params.toString()}`;
+  const baseUrl = (options.baseUrl ?? '').replace(/\/+$/, '');
+  return `${baseUrl}${path}`;
 }
 
 export async function requestNotificationStream(

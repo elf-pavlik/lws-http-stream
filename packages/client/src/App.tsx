@@ -1,5 +1,14 @@
 import { For, Show, createMemo, createSignal } from 'solid-js';
+import { DeploymentPicker } from './components/DeploymentPicker.tsx';
 import { StreamPanel } from './components/StreamPanel.tsx';
+import {
+  deploymentBaseUrl,
+  deploymentById,
+  deploymentEndpoint,
+  detectDeployment,
+  isLocalClient,
+  type DeploymentId,
+} from './lib/deployments.ts';
 import { createStreamSession } from './lib/session.ts';
 import {
   formatPercent,
@@ -9,9 +18,19 @@ import {
 const INITIAL_INTERVAL_MS = 500;
 
 export default function App() {
+  const hostname = window.location.hostname;
+  const detected = detectDeployment(hostname);
+
   const [intervalMs, setIntervalMs] = createSignal(INITIAL_INTERVAL_MS);
+  const [deploymentId, setDeploymentId] = createSignal<DeploymentId>(
+    detected?.id ?? 'cloudflare',
+  );
   const [ndjsonInlineContext, setNdjsonInlineContext] = createSignal(false);
   const [cborInlineContext, setCborInlineContext] = createSignal(true);
+
+  const deployment = createMemo(() => deploymentById(deploymentId()));
+  // Relative URLs when the page is served by the selected deployment itself.
+  const backendBaseUrl = createMemo(() => deploymentBaseUrl(deployment(), hostname));
 
   const ndjson = createStreamSession('ndjson');
   const cbor = createStreamSession('cbor-seq');
@@ -47,15 +66,19 @@ export default function App() {
   const startAll = (): void => {
     const nextInterval = clamp(Math.round(intervalMs()), 0, 5000);
     setIntervalMs(nextInterval);
+    const baseUrl = backendBaseUrl();
     ndjson.start({
+      baseUrl,
       intervalMs: nextInterval,
       inlineContext: ndjsonInlineContext(),
     });
     cbor.start({
+      baseUrl,
       intervalMs: nextInterval,
       inlineContext: cborInlineContext(),
     });
     jelly.start({
+      baseUrl,
       intervalMs: nextInterval,
       inlineContext: false,
     });
@@ -86,6 +109,16 @@ export default function App() {
     jelly.stop();
   };
 
+  const selectDeployment = (id: DeploymentId): void => {
+    if (id === deploymentId()) {
+      return;
+    }
+    setDeploymentId(id);
+    if (isRunning()) {
+      startAll();
+    }
+  };
+
   return (
     <main class="app-shell">
       <header class="hero">
@@ -104,6 +137,12 @@ export default function App() {
       </header>
 
       <section class="controls" aria-label="Stream controls">
+        <DeploymentPicker
+          selected={deploymentId()}
+          endpoint={deploymentEndpoint(backendBaseUrl())}
+          showLocal={isLocalClient(hostname)}
+          onSelect={selectDeployment}
+        />
         <form onSubmit={restartAll}>
           <label>
             Interval (ms)
@@ -130,11 +169,17 @@ export default function App() {
         </form>
         <p class="hint">
           Start opens all three streams and keeps them running until you stop them.
-          Re-start aborts the current responses and opens a fresh set with the current
-          settings. Stop is available only while a stream is connecting or running; it
-          aborts every fetch so the server-side producers stop. Toggling @context while
-          streams are running reopens all three with the new mode, keeping the comparison
-          aligned. Jelly-RDF has no context toggle.
+          Choosing a different backend updates the endpoint immediately and restarts all
+          running streams against it. The picker preselects the backend that serves this
+          page — the local server on localhost, Cloudflare on <code>*.workers.dev</code>,
+          and Vercel on <code>*.vercel.app</code> — and deployments served from their own
+          origin are called with relative URLs, so preview builds use their own functions
+          rather than production. The local option only appears on localhost. Re-start
+          aborts the current responses and opens a fresh set with the current settings.
+          Stop is available only while a stream is connecting or running; it aborts every
+          fetch so the server-side producers stop. Toggling @context while streams are
+          running reopens all three with the new mode, keeping the comparison aligned.
+          Jelly-RDF has no context toggle.
         </p>
       </section>
 
