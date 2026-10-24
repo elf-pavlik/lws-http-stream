@@ -4,11 +4,11 @@
   "license": "MIT",
   "private": true,
   "type": "module",
-  "description": "Golem Effect HTTP router streaming the LWS notification fixtures as NDJSON",
+  "description": "Golem application with a Rust CBOR-LD router and an Effect NDJSON router",
   "scripts": {
     "build": "${GOLEM_BIN:-golem} build -L -Y",
-    "deploy": "${GOLEM_BIN:-golem} deploy -L -Y",
-    "dev": "npm run build && npm run deploy",
+    "deploy": "${GOLEM_BIN:-golem} build -L -Y && ${GOLEM_BIN:-golem} deploy -L -Y",
+    "dev": "npm run deploy",
     "server": "${GOLEM_BIN:-golem} server run",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run"

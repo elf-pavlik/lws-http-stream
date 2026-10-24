@@ -17,7 +17,7 @@
     "dev": "concurrently -k -n server,client -c cyan,magenta \"npm run dev:server\" \"npm run dev:client\"",
     "dev:server": "npm run dev -w @lws-stream/server",
     "dev:client": "npm run dev -w @lws-stream/client",
-    "generate:fixtures": "npm run generate:fixtures -w @lws-stream/server && cp packages/server/fixtures/notifications.json packages/golem/fixtures/notifications.json && cp packages/server/fixtures/contexts/lws-notifications-v1.json packages/golem/fixtures/contexts/lws-notifications-v1.json",
+    "generate:fixtures": "npm run generate:fixtures -w @lws-stream/server && cp packages/server/fixtures/notifications.json packages/golem/fixtures/notifications.json && cp packages/server/fixtures/contexts/lws-notifications-v1.json packages/golem/fixtures/contexts/lws-notifications-v1.json && cp packages/server/fixtures/contexts/cached-context.json packages/golem/fixtures/contexts/cached-context.json",
     "build:client": "npm run build -w @lws-stream/client",
     "build": "npm run build:client && npm run typecheck",
     "typecheck": "tsc -p tsconfig.json && npm run typecheck -w @lws-stream/server && npm run typecheck -w @lws-stream/client && npm --prefix packages/golem run typecheck",

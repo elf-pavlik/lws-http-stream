@@ -32,11 +32,20 @@ components:
   lws-http-stream-golem:effect-main:
     dir: ""
     templates: effect
+  lws-http-stream-golem:rust-main:
+    dir: "rust"
+    templates: rust
 
 httpApi:
   deployments:
     local:
+      # Main server used by the UI: NDJSON from Rust, CBOR-LD from spruceid/cbor-ld.
       - domain: 127.0.0.1:8787
+        scheme: http
+        agents:
+          LwsRouter: {}
+      # The original Effect implementation remains available for comparison.
+      - domain: effect.localhost:8787
         scheme: http
         agents:
           LwsNotificationsRouter: {}

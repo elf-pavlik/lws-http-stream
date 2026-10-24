@@ -1,0 +1,32 @@
+[package]
+name = "lws_http_stream_golem_rust_main"
+version = "0.0.1"
+edition = "2024"
+
+[profile.release]
+opt-level = "s"
+lto = true
+strip = "symbols"
+
+[lib]
+crate-type = ["cdylib"]
+path = "src/lib.rs"
+
+[dependencies]
+log = { version = "0.4.29", features = ["kv"] }
+golem-rust = { version = "3.0.0", features = ["export_golem_agentic"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+cbor-ld = { git = "https://github.com/spruceid/cbor-ld", rev = "18b8219e37baede9cfd40599a367facd06dd20f1", default-features = false }
+json-ld = "0.21.1"
+ciborium = "0.2"
+
+# Build the WIT bindings with Golem's forked wit-bindgen, which adds an
+# "outline-lift" optimization that shrinks the giant generated lift/lower
+# wrappers embedded by golem-rust.
+[patch.crates-io]
+wit-bindgen = { git = "https://github.com/golemcloud/wit-bindgen", branch = "wit-bindgen-golem-1.6", version = "=0.59.0" }
+# cbor-ld only uses tokio from its optional CLI binary. The library is built
+# with default-features = false, so the stub keeps tokio's runtime out of the
+# wasm32-wasip2 component.
+tokio = { path = "vendor/tokio-stub" }

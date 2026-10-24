@@ -1,0 +1,14 @@
+{
+  "$schema": "https://raw.githubusercontent.com/jetify-com/devbox/0.14.2/.schema/devbox.schema.json",
+  "packages": [
+    "nodejs@24",
+    "rustup@1.29.1"
+  ],
+  "shell": {
+    "init_hook": [
+      "export PATH=\"$HOME/.cargo/bin:$PATH\"",
+      "rustup default stable",
+      "rustup target add wasm32-wasip2"
+    ]
+  }
+}

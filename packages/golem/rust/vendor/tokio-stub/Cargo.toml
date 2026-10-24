@@ -1,0 +1,11 @@
+[package]
+name = "tokio"
+version = "1.99.0"
+edition = "2021"
+description = "Empty tokio substitute for the cbor-ld library on wasm32-wasip2"
+license = "MIT"
+
+[features]
+default = []
+rt-multi-thread = []
+macros = []

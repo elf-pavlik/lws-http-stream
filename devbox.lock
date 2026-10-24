@@ -1,0 +1,87 @@
+{
+  "lockfile_version": "1",
+  "packages": {
+    "github:NixOS/nixpkgs/nixpkgs-unstable": {
+      "last_modified": "2026-10-10T12:58:50Z",
+      "resolved": "github:NixOS/nixpkgs/ca1659429c950a11a565b5764e37a1b704e17ec8?lastModified=1791637130&narHash=sha256-TuvwvSjJrpqyIYdjhQ7Wu%2BADVfeOpO2Um21%2FV7TOubw%3D"
+    },
+    "nodejs@24": {
+      "last_modified": "2026-10-20T14:23:57Z",
+      "plugin_version": "0.0.5",
+      "resolved": "github:NixOS/nixpkgs/5adc50831c259f87faeb09ddf930d43597197473#nodejs",
+      "source": "devbox-search",
+      "version": "24.21.0",
+      "systems": {
+        "aarch64-darwin": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/i376rizbw75rswsg2qlk47wj4zz3biqq-nodejs-24.21.0",
+              "default": true
+            }
+          ],
+          "store_path": "/nix/store/i376rizbw75rswsg2qlk47wj4zz3biqq-nodejs-24.21.0"
+        },
+        "aarch64-linux": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/6vlx51wp6rjcsb1gcx54hfb7ndf3k2h8-nodejs-24.21.0",
+              "default": true
+            }
+          ],
+          "store_path": "/nix/store/6vlx51wp6rjcsb1gcx54hfb7ndf3k2h8-nodejs-24.21.0"
+        },
+        "x86_64-linux": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/j1j9b0w3mhpccdli73ycj5w7nf6fkzqz-nodejs-24.21.0",
+              "default": true
+            }
+          ],
+          "store_path": "/nix/store/j1j9b0w3mhpccdli73ycj5w7nf6fkzqz-nodejs-24.21.0"
+        }
+      }
+    },
+    "rustup@1.29.1": {
+      "last_modified": "2026-10-20T14:23:57Z",
+      "plugin_version": "0.0.1",
+      "resolved": "github:NixOS/nixpkgs/5adc50831c259f87faeb09ddf930d43597197473#rustup",
+      "source": "devbox-search",
+      "version": "1.29.1",
+      "systems": {
+        "aarch64-darwin": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/mysqxkbpck8hcz33zf1sbryqxq1vmah4-rustup-1.29.1",
+              "default": true
+            }
+          ],
+          "store_path": "/nix/store/mysqxkbpck8hcz33zf1sbryqxq1vmah4-rustup-1.29.1"
+        },
+        "aarch64-linux": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/z5fwb1020i3rf4qk88w3jkf1cm6yg175-rustup-1.29.1",
+              "default": true
+            }
+          ],
+          "store_path": "/nix/store/z5fwb1020i3rf4qk88w3jkf1cm6yg175-rustup-1.29.1"
+        },
+        "x86_64-linux": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/nsnd1r5zs3x5hlpp1ilzdjmq0c57cay8-rustup-1.29.1",
+              "default": true
+            }
+          ],
+          "store_path": "/nix/store/nsnd1r5zs3x5hlpp1ilzdjmq0c57cay8-rustup-1.29.1"
+        }
+      }
+    }
+  }
+}

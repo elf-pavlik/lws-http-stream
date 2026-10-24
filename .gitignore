@@ -9,3 +9,7 @@ coverage/
 .vercel
 /golem
 golem-temp/
+.devbox/
+.direnv/
+!devbox.json
+!devbox.lock
