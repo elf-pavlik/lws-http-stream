@@ -129,7 +129,7 @@ export default function App() {
         <p class="lede">
           Start all three HTTP streams to carry the same ordered LWS notifications:
           compact NDJSON, an RFC 8742 CBOR Sequence, and a length-delimited Jelly-RDF
-          stream. With @context off the CBOR items are plain CBOR; with @context on they
+          1.2 stream. With @context off the CBOR items are plain CBOR; with @context on they
           are compressed CBOR-LD. Every byte shown below comes from the actual response
           bodies. Stop aborts all three response streams, and a context change restarts
           all three so their sequences stay aligned.
@@ -235,7 +235,7 @@ export default function App() {
           onToggleContext={toggleCborContext}
         />
         <StreamPanel
-          title="Jelly-RDF"
+          title="Jelly-RDF 1.2"
           mediaType="application/x-jelly-rdf"
           session={jelly}
           counterpartIds={ndjsonIds()}
@@ -247,8 +247,9 @@ export default function App() {
         <h2>How the numbers are produced</h2>
         <p>
           Each stream is read independently with a streaming reader. NDJSON is split on LF bytes;
-          CBOR items are framed incrementally according to RFC 8742; Jelly frames are decoded from
-          varint length-prefixed Protobuf messages. Off mode uses plain CBOR and link-only context;
+          CBOR items are framed incrementally according to RFC 8742; Jelly-RDF 1.2 messages
+          are decoded from varint length-prefixed Protobuf frames using their explicit RDF
+          Message boundaries. Off mode uses plain CBOR and link-only context;
           on mode inlines the context and uses CBOR-LD compression. Both reduction figures use
           NDJSON as the baseline: <code>100 × (NDJSON bytes − CBOR bytes) / NDJSON bytes</code>{' '}
           and <code>100 × (NDJSON bytes − Jelly bytes) / NDJSON bytes</code>. HTTP headers, the
@@ -261,7 +262,7 @@ export default function App() {
               'The first chunk is flushed immediately; later chunks are spaced by the interval.',
               'Stopping aborts every fetch and reader, which stops each server-side producer.',
               'Changing either @context toggle restarts all three streams from the same fixture sequence.',
-              'Jelly frames are decoded to RDF/JS quads only to reconstruct the same notification fields; no RDF querying or JSON-LD expansion is performed.',
+              'Jelly-RDF 1.2 messages are decoded to RDF/JS quads only to reconstruct the same notification fields; no RDF querying or JSON-LD expansion is performed.',
             ]}
           >
             {point => <li>{point}</li>}

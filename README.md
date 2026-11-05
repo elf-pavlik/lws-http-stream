@@ -14,8 +14,8 @@ notification sequence:
 - **NDJSON**: one compact JSON document per line, `application/x-ndjson`.
 - **CBOR Sequence**: plain CBOR items in link-only mode, or compressed CBOR-LD
   items when `@context` is inlined, `application/cbor-seq`.
-- **Jelly-RDF**: length-delimited `RdfStreamFrame` messages with RDF/JS quads,
-  `application/x-jelly-rdf`.
+- **Jelly-RDF**: length-delimited Jelly-RDF 1.2 `RdfStreamFrame` messages with
+  explicit RDF Message boundaries and RDF/JS quads, `application/x-jelly-rdf`.
 
 Each NDJSON/CBOR panel has its own `@context` toggle controlling whether the
 context is only advertised in the HTTP `Link` header or is also inlined into
@@ -143,6 +143,8 @@ The Jelly writer uses the Jelly-RDF protobuf schema from the Jelly-RDF project
 (the schema used by `jelly_rs`). Upstream `jelly_rs` currently implements
 deserialization only, so the Rust router supplies the row-layout v2 writer; its
 output is verified with both `jelly_rs` and the client's `rdfjs-jelly` parser.
+The Node/Hono server writes Jelly-RDF 1.2, while the client accepts both the
+Golem backend's 1.1 stream and the Hono server's 1.2 stream.
 
 The local Node server and the Golem Rust router both listen on **8787**. Run one
 at a time. The manifest sets `localServer.customRequestPort: 8787` and registers
@@ -267,7 +269,7 @@ Content negotiation:
 |---|---|
 | `application/x-ndjson` | NDJSON stream |
 | `application/cbor-seq` | RFC 8742 CBOR Sequence (plain CBOR or CBOR-LD, depending on `context`) |
-| `application/x-jelly-rdf` | Length-delimited Jelly-RDF `RdfStreamFrame` stream |
+| `application/x-jelly-rdf` | Length-delimited Jelly-RDF 1.2 `RdfStreamFrame` stream (the Golem backend emits 1.1) |
 | missing / empty | NDJSON (documented default) |
 | `*/*` or `application/*` | NDJSON unless quality values select another representation |
 | unsupported only | `406 Not Acceptable` |
@@ -511,10 +513,13 @@ the message length in bytes. There are no newline delimiters, no enclosing array
 and no gRPC message envelope. gRPC provides its own message framing; this demo
 uses HTTP/1.1 or HTTP/2 response-body streaming instead.
 
-The server writes one `RdfStreamFrame` per notification:
+The server writes one `RdfStreamFrame` per notification using Jelly-RDF 1.2
+(protocol version 3) with explicit RDF Messages:
 
-- `rdfjs-jelly`'s delimited `Writer` is created once per response.
-- `addMessage(quads)` flushes exactly one frame.
+- `rdfjs-jelly`'s delimited `Writer` is created once per response with
+  `version: 3`, `streamType: MESSAGES`, and `packMessages: false`.
+- `addMessage(quads)` closes one logical message and immediately flushes its
+  frame instead of buffering small messages into a shared frame.
 - The Writer immediately writes the length-prefixed frame to the response
   `ReadableStream`.
 - The first frame contains the stream options and lookup entries; later frames
@@ -522,17 +527,14 @@ The server writes one `RdfStreamFrame` per notification:
 
 ### Implementation version
 
-This repository uses `rdfjs-jelly` 0.1.6. That implementation:
+This repository uses `rdfjs-jelly` 0.2.0. The Hono server writes Jelly-RDF 1.2
+(protocol version 3) with flat quads, explicit RDF Message boundaries, delimited
+output, lookup compression, and namespaces. The Golem Rust backend still writes
+Jelly-RDF 1.1 (protocol version 2), and the client parser accepts Jelly-RDF 1.0
+through 1.2.
 
-- reads Jelly protocol versions 1 and 2
-- writes Jelly protocol version 2 only (Jelly-RDF 1.1)
-- supports delimited output, lookup compression, namespaces, and RDF/JS quads
-
-The current Jelly-RDF specification in development is 1.2 (protocol version 3).
-`rdfjs-jelly` 0.1.6 does not yet write version 1.2 streams. The media type and
-delimited framing used here are the same; the stream's version tag identifies the
-protocol version. Upgrade `rdfjs-jelly` when version-1.2 writing support becomes
-available.
+The media type and delimited framing are the same across versions; the stream's
+version tag identifies the protocol version.
 
 ### RDF mapping
 
@@ -562,9 +564,11 @@ const parser = new StreamParser({ messages: true });
 const decoded = response.body.pipeThrough(countedBytes).pipeThrough(parser);
 ```
 
-`StreamParser` handles varint length prefixes and frames split across arbitrary
-transport reads. The reader groups emitted `MessageQuad` entries by
-`messageCounter`; each complete frame becomes one decoded notification. No
+`StreamParser` handles Jelly-RDF 1.0 through 1.2, varint length prefixes, and
+frames split across arbitrary transport reads. The reader groups emitted
+`MessageQuad` entries by `messageCounter`; each complete logical message becomes
+one decoded notification. For Jelly-RDF 1.2, messages may span or share frames,
+so message boundaries do not depend on HTTP chunks or frame boundaries. No
 assumption is made that HTTP chunks align with Jelly frames.
 
 The Jelly panel has no `@context` toggle. Its response has no JSON-LD context
@@ -613,9 +617,9 @@ With `count=8`, one run produced:
 |---|---:|---:|
 | NDJSON | 3,272 | 409.0 B |
 | Plain CBOR Sequence | 2,896 | 362.0 B |
-| Jelly-RDF | 3,193 | 399.1 B |
+| Jelly-RDF 1.2 | 2,411 | 301.4 B |
 | CBOR reduction | | **11.5%** |
-| Jelly reduction | | **2.4%** |
+| Jelly reduction | | **26.3%** |
 
 **Inline-context mode**
 
@@ -623,9 +627,9 @@ With `count=8`, one run produced:
 |---|---:|---:|
 | NDJSON | 3,944 | 493.0 B |
 | CBOR-LD Sequence | 2,097 | 262.1 B |
-| Jelly-RDF | 3,193 | 399.1 B |
+| Jelly-RDF 1.2 | 2,411 | 301.4 B |
 | CBOR reduction | | **46.8%** |
-| Jelly reduction | | **19.0%** |
+| Jelly reduction | | **38.9%** |
 
 These totals use the generated fixture file in this repository. The
 representations carry fixed-length UUIDs and six-character cuid2 segments, so
@@ -847,7 +851,8 @@ Coverage includes:
 - NDJSON one-object-per-line framing and byte counts
 - CBOR Sequence concatenation and exact item boundaries
 - Plain-CBOR and CBOR-LD encode/decode round-trips
-- Jelly-RDF frame encoding, length-delimited framing, and RDF/JS decoding
+- Jelly-RDF 1.2 message encoding, length-delimited framing, and RDF/JS decoding
+- Jelly-RDF 1.1 decoding for streams from the Golem Rust backend
 - Link-only and inline-context behavior for NDJSON and CBOR
 - Logical equivalence and ordering across all three representations
 - Public context URL array and cached-context resolution
@@ -855,8 +860,8 @@ Coverage includes:
 - Conditional Link context relation: included in link-only mode, omitted inline
 - Generated fixture shape: UUID URNs, actor hosts, and flat six-character cuid2
   paths
-- Chunk-boundary robustness: NDJSON, plain CBOR, CBOR-LD, and Jelly frames fed
-  one byte at a time
+- Chunk-boundary robustness: NDJSON, plain CBOR, CBOR-LD, and Jelly-RDF 1.2
+  messages fed one byte at a time
 - Incremental plain-CBOR, CBOR-LD, and Jelly-RDF decoding through the client
   readers
 - Size-reduction and average-byte calculations
@@ -871,9 +876,10 @@ Coverage includes:
   involved. This is a benchmark/demo, not a production LWS notification service.
 - Jelly-RDF uses `application/x-jelly-rdf` and the delimited Protobuf variant:
   each `RdfStreamFrame` is prefixed by its varint byte length. No newline or
-  gRPC envelope is added. `rdfjs-jelly` 0.1.6 writes protocol version 2
-  (Jelly-RDF 1.1); version 1.2 writing is not yet available in that JS
-  implementation.
+  gRPC envelope is added. The Hono server writes Jelly-RDF 1.2 (protocol
+  version 3) with explicit RDF Messages and flushes each notification's frame
+  immediately. The Golem Rust backend writes Jelly-RDF 1.1 (protocol version 2);
+  the client parser accepts both.
 - Jelly has no `@context` toggle and no JSON-LD context `Link` relation. Its RDF
   mapping is a simple deterministic projection of the notification envelope,
   activity, object, and published fields.

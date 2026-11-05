@@ -1,7 +1,8 @@
 import {
   DataFactory,
-  LogicalStreamType,
   PhysicalStreamType,
+  RdfStreamType,
+  RdfVersion,
   Writer,
 } from 'rdfjs-jelly/browser';
 import type { LwsActivity, LwsNotification } from './notifications.ts';
@@ -83,9 +84,10 @@ export interface JellyNotificationEncoder {
 }
 
 /**
- * One RdfStreamFrame per notification. rdfjs-jelly's delimited Writer prefixes
- * each Protobuf frame with its varint length and writes it to the provided
- * output immediately.
+ * Jelly-RDF 1.2 (protocol version 3) with explicit RDF Message boundaries.
+ * `packMessages: false` emits each notification's frame immediately instead of
+ * buffering small messages into a shared frame, keeping delivery incremental.
+ * The delimited Writer prefixes each Protobuf frame with its varint length.
  */
 export function createJellyNotificationEncoder(): JellyNotificationEncoder {
   let pending: Uint8Array[] = [];
@@ -103,8 +105,11 @@ export function createJellyNotificationEncoder(): JellyNotificationEncoder {
     },
     {
       delimited: true,
+      version: 3,
+      streamType: RdfStreamType.MESSAGES,
+      packMessages: false,
       physicalType: PhysicalStreamType.QUADS,
-      logicalType: LogicalStreamType.FLAT_QUADS,
+      rdfVersion: RdfVersion.RDF_1_2,
       streamName: 'lws-notifications',
       namespaces: {
         lws: LWS,

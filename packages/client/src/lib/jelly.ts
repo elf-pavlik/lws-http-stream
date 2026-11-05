@@ -13,8 +13,9 @@ const abortError = (): DOMException =>
 
 /**
  * Decode a length-delimited Jelly-RDF response body incrementally. The browser
- * StreamParser handles varint length prefixes and frames split across arbitrary
- * transport chunks. Each frame is one notification graph in this demo.
+ * StreamParser handles Jelly-RDF 1.0 through 1.2 and varint length prefixes,
+ * frames split across arbitrary transport chunks, and explicit RDF Message
+ * boundaries. Each notification graph is written as one logical message.
  */
 export async function readJellyStream(
   response: Response,
