@@ -14,6 +14,11 @@ import {
   negotiateAccept,
 } from './negotiation.ts';
 import { createNotificationStream } from './stream.ts';
+import {
+  DEFAULT_JELLY_VERSION,
+  JELLY_VERSIONS,
+} from './jelly.ts';
+import type { JellyVersion } from './jelly.ts';
 
 export interface AppOptions {
   defaultIntervalMs?: number;
@@ -42,6 +47,8 @@ export function createApp(options: AppOptions = {}): Hono {
         defaultRepresentation: DEFAULT_REPRESENTATION,
         contextModes: CONTEXT_MODES,
         defaultContextMode: DEFAULT_CONTEXT_MODE,
+        jellyVersions: JELLY_VERSIONS,
+        defaultJellyVersion: DEFAULT_JELLY_VERSION,
         cborldRegistryEntryId: CBORLD_REGISTRY_ENTRY_ID,
       },
       200,
@@ -107,6 +114,13 @@ export function createApp(options: AppOptions = {}): Hono {
       return invalidContextMode(c);
     }
 
+    const jellyVersion = isJelly
+      ? parseJellyVersion(c.req.query('jellyVersion'))
+      : undefined;
+    if (jellyVersion === null) {
+      return invalidJellyVersion(c);
+    }
+
     const notifications = notificationFixtures;
 
     const body = createNotificationStream({
@@ -114,6 +128,7 @@ export function createApp(options: AppOptions = {}): Hono {
       representation: negotiation.representation,
       inlineContext: !isJelly && contextMode === 'inline',
       intervalMs,
+      jellyVersion,
       count: count ?? Number.POSITIVE_INFINITY,
       signal: c.req.raw.signal,
       onChunk: options.onChunk,
@@ -209,6 +224,31 @@ function invalidContextMode(c: Context): Response {
       parameter: 'context',
       message: '"context" must be "link" or "inline".',
       allowed: CONTEXT_MODES,
+    },
+    400,
+    {
+      'Cache-Control': 'no-store',
+      'Access-Control-Allow-Origin': '*',
+    },
+  );
+}
+
+function parseJellyVersion(raw: string | undefined): JellyVersion | null {
+  if (raw === undefined) {
+    return DEFAULT_JELLY_VERSION;
+  }
+  return (JELLY_VERSIONS as readonly string[]).includes(raw)
+    ? (raw as JellyVersion)
+    : null;
+}
+
+function invalidJellyVersion(c: Context): Response {
+  return c.json(
+    {
+      error: 'invalid_query',
+      parameter: 'jellyVersion',
+      message: '"jellyVersion" must be "1.1" or "1.2".',
+      allowed: JELLY_VERSIONS,
     },
     400,
     {

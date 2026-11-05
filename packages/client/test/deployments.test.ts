@@ -47,6 +47,15 @@ describe('deployment detection', () => {
   }
 });
 
+describe('deployment Jelly versions', () => {
+  it('requests 1.2 from Hono backends and 1.1 from Golem', () => {
+    expect(deploymentById('local').jellyVersion).toBe('1.2');
+    expect(deploymentById('cloudflare').jellyVersion).toBe('1.2');
+    expect(deploymentById('vercel').jellyVersion).toBe('1.2');
+    expect(deploymentById('golem').jellyVersion).toBe('1.1');
+  });
+});
+
 describe('deployment base URL', () => {
   it('uses relative URLs on the local client', () => {
     expect(deploymentBaseUrl(deploymentById('local'), 'localhost')).toBe('');

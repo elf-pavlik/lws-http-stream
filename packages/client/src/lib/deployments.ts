@@ -1,4 +1,6 @@
 // Keep these URLs in sync with the deployment links in the root README.
+import type { JellyVersion } from './types.ts';
+
 export type DeploymentId = 'local' | 'cloudflare' | 'vercel' | 'golem';
 
 export interface Deployment {
@@ -11,6 +13,8 @@ export interface Deployment {
    */
   baseUrl: string;
   description: string;
+  /** Jelly-RDF version this backend writes. */
+  jellyVersion: JellyVersion;
 }
 
 export const HONO_DEPLOYMENTS: readonly Deployment[] = [
@@ -19,18 +23,21 @@ export const HONO_DEPLOYMENTS: readonly Deployment[] = [
     label: 'Local',
     baseUrl: '',
     description: 'Local Hono server through the Vite proxy',
+    jellyVersion: '1.2',
   },
   {
     id: 'cloudflare',
     label: 'Cloudflare',
     baseUrl: 'https://cbor-ld-stream-demo.elf-pavlik.workers.dev',
     description: 'Hono on Cloudflare Workers',
+    jellyVersion: '1.2',
   },
   {
     id: 'vercel',
     label: 'Vercel',
     baseUrl: 'https://lws-http-stream.vercel.app',
     description: 'Hono on Vercel Functions',
+    jellyVersion: '1.2',
   },
 ];
 
@@ -40,6 +47,7 @@ export const GOLEM_DEPLOYMENTS: readonly Deployment[] = [
     label: 'Golem',
     baseUrl: 'https://lws-http-stream.apps.golem.cloud',
     description: 'Rust HTTP router on Golem Cloud (WebAssembly)',
+    jellyVersion: '1.1',
   },
 ];
 

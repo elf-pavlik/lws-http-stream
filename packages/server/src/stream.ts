@@ -1,6 +1,7 @@
 import { encodePlainCborNotification } from './cbor.ts';
 import { encodeCborLdNotification } from './cborld.ts';
 import { createJellyNotificationEncoder } from './jelly.ts';
+import type { JellyVersion } from './jelly.ts';
 import { withInlineContext } from './context.ts';
 import type { LwsNotification } from './notifications.ts';
 import { encodeNdjsonNotification } from './ndjson.ts';
@@ -17,6 +18,8 @@ export interface NotificationStreamOptions {
   representation: Representation;
   inlineContext: boolean;
   intervalMs: number;
+  /** Jelly-RDF protocol version. Defaults to 1.2 in the encoder. */
+  jellyVersion?: JellyVersion;
   /** Number of notifications to emit. Omit to cycle the input forever. */
   count?: number;
   signal?: AbortSignal;
@@ -36,6 +39,7 @@ export function createNotificationStream(
     representation,
     inlineContext,
     intervalMs,
+    jellyVersion,
     signal,
     onChunk,
   } = options;
@@ -100,7 +104,9 @@ export function createNotificationStream(
   return new ReadableStream<Uint8Array>({
     async start(controller) {
       const jellyEncoder =
-        representation === 'jelly' ? createJellyNotificationEncoder() : undefined;
+        representation === 'jelly'
+          ? createJellyNotificationEncoder(jellyVersion)
+          : undefined;
 
       try {
         for (let index = 0; index < count; index += 1) {

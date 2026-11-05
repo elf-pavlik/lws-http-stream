@@ -1,20 +1,25 @@
 import { describe, expect, it } from 'vitest';
 import {
+  LogicalStreamType,
   Parser,
   RdfStreamType,
   RdfVersion,
   StreamParser,
 } from 'rdfjs-jelly/browser';
 import type { StreamOptions } from 'rdfjs-jelly/browser';
-import { createJellyNotificationEncoder, notificationToQuads } from '../src/jelly.ts';
+import {
+  createJellyNotificationEncoder,
+  notificationToQuads,
+} from '../src/jelly.ts';
+import type { JellyVersion } from '../src/jelly.ts';
 import { notificationFixtures } from '../src/notifications.ts';
 
 function quadValues(quads: readonly { subject: { value: string }; predicate: { value: string }; object: { value: string } }[]) {
   return quads.map(quad => [quad.subject.value, quad.predicate.value, quad.object.value]);
 }
 
-function encodeFixtures(): Uint8Array {
-  const encoder = createJellyNotificationEncoder();
+function encodeFixtures(version: JellyVersion = '1.2'): Uint8Array {
+  const encoder = createJellyNotificationEncoder(version);
   const chunks: Uint8Array[] = [];
   for (const notification of notificationFixtures) {
     chunks.push(...encoder.addNotification(notification));
@@ -56,7 +61,7 @@ describe('Jelly-RDF encoding', () => {
 
     const reader = new ReadableStream<Uint8Array>({
       start(controller) {
-        controller.enqueue(encodeFixtures());
+        controller.enqueue(encodeFixtures('1.2'));
         controller.close();
       },
     })
@@ -82,6 +87,31 @@ describe('Jelly-RDF encoding', () => {
         0,
       ),
     );
+  });
+
+  it('still writes Jelly-RDF 1.1 when requested', async () => {
+    const parser = new StreamParser({ messages: true });
+    let options: StreamOptions | undefined;
+    parser.on('options', value => {
+      options = value as StreamOptions;
+    });
+
+    const reader = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(encodeFixtures('1.1'));
+        controller.close();
+      },
+    })
+      .pipeThrough(parser)
+      .getReader();
+    while (!(await reader.read()).done) {
+      // Drain the stream so the options row is consumed.
+    }
+
+    expect(options).toMatchObject({
+      version: 2,
+      logicalType: LogicalStreamType.FLAT_QUADS,
+    });
   });
 
   it('maps notification fields to deterministic RDF quads', () => {

@@ -63,6 +63,8 @@ type, and byte stream directly.
   notification, name/datatype lookup tables, and no prefix table.
 - The RDF mapping matches `packages/server/src/jelly.ts` so the client can
   reconstruct the same notification objects.
+- The client requests `jellyVersion=1.1` for the Golem deployment. The router
+  ignores that query parameter and always emits protocol version 2.
 - The generated output was validated with `jelly_rs`'s `FrameReader` /
   `Deserializer` and with the client's `rdfjs-jelly` browser parser.
 - `build.rs` compiles the proto with prost and a vendored `protoc`, so no system

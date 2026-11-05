@@ -1,4 +1,4 @@
-import type { Representation } from './lib/types.ts';
+import type { JellyVersion, Representation } from './lib/types.ts';
 
 export const MEDIA_TYPES: Readonly<Record<Representation, string>> = {
   ndjson: 'application/x-ndjson',
@@ -12,6 +12,7 @@ export interface StreamRequestOptions {
   baseUrl: string;
   intervalMs: number;
   inlineContext: boolean;
+  jellyVersion?: JellyVersion;
   signal: AbortSignal;
 }
 
@@ -20,11 +21,16 @@ export function notificationsUrl(options: {
   intervalMs: number;
   inlineContext: boolean;
   representation?: Representation;
+  jellyVersion?: JellyVersion;
 }): string {
   const params = new URLSearchParams({
     interval: String(options.intervalMs),
   });
-  if (options.representation !== 'jelly') {
+  if (options.representation === 'jelly') {
+    if (options.jellyVersion !== undefined) {
+      params.set('jellyVersion', options.jellyVersion);
+    }
+  } else {
     params.set('context', options.inlineContext ? 'inline' : 'link');
   }
   const path = `/notifications?${params.toString()}`;

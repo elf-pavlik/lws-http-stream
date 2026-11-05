@@ -5,12 +5,13 @@ import { decodeCborLdItem } from './cborld.ts';
 import { readJellyStream } from './jelly.ts';
 import { readCborSequenceStream, readNdjsonStream } from './readers.ts';
 import { initialStats } from './stats.ts';
-import type { ReceivedNotification, Representation, StreamStats } from './types.ts';
+import type { ReceivedNotification, Representation, StreamStats, JellyVersion } from './types.ts';
 
 export interface SessionOptions {
   baseUrl: string;
   intervalMs: number;
   inlineContext: boolean;
+  jellyVersion?: JellyVersion;
 }
 
 export interface StreamSession {
@@ -91,6 +92,7 @@ export function createStreamSession(representation: Representation): StreamSessi
           baseUrl: options.baseUrl,
           intervalMs: options.intervalMs,
           inlineContext: options.inlineContext,
+          jellyVersion: options.jellyVersion,
           signal: controller.signal,
         });
 

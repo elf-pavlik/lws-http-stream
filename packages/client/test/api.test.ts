@@ -65,8 +65,31 @@ describe('notification URLs', () => {
         intervalMs: 250,
         inlineContext: true,
         representation: 'jelly',
+        jellyVersion: '1.2',
       }),
-    ).toBe('/notifications?interval=250');
+    ).toBe('/notifications?interval=250&jellyVersion=1.2');
+  });
+
+  it('requests the Jelly version supported by the selected backend', () => {
+    expect(
+      notificationsUrl({
+        baseUrl: 'https://lws-http-stream.apps.golem.cloud',
+        intervalMs: 500,
+        inlineContext: false,
+        representation: 'jelly',
+        jellyVersion: '1.1',
+      }),
+    ).toBe(
+      'https://lws-http-stream.apps.golem.cloud/notifications?interval=500&jellyVersion=1.1',
+    );
+    expect(
+      notificationsUrl({
+        intervalMs: 250,
+        inlineContext: false,
+        representation: 'jelly',
+        jellyVersion: '1.2',
+      }),
+    ).toBe('/notifications?interval=250&jellyVersion=1.2');
   });
 
   it('prefixes the selected deployment base URL', () => {

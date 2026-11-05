@@ -84,6 +84,9 @@ export async function readJellyStream(
       }
       quads.push(entry.quad);
     }
+    if (signal?.aborted) {
+      throw abortError();
+    }
     flush();
     if (signal?.aborted) {
       throw abortError();

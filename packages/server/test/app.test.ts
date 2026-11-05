@@ -87,6 +87,34 @@ describe('notification endpoint — link-only mode (default)', () => {
     ).toBe(true);
   });
 
+  it('honours an explicit Jelly-RDF 1.1 request', async () => {
+    const response = await request(
+      '/notifications?count=3&interval=0&jellyVersion=1.1',
+      'application/x-jelly-rdf',
+    );
+    expect(response.status).toBe(200);
+
+    const bytes = new Uint8Array(await response.arrayBuffer());
+    const messages = new Parser({
+      messages: true,
+      maxSupportedVersion: 2,
+    }).parseMessages(bytes);
+    expect(messages).toHaveLength(3);
+  });
+
+  it('rejects an unsupported Jelly-RDF version', async () => {
+    const response = await request(
+      '/notifications?count=1&interval=0&jellyVersion=1.3',
+      'application/x-jelly-rdf',
+    );
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({
+      error: 'invalid_query',
+      parameter: 'jellyVersion',
+      allowed: ['1.1', '1.2'],
+    });
+  });
+
   it('carries exactly the same logical notifications in both representations', async () => {
     const count = notificationFixtures.length;
     const [ndjsonResponse, cborResponse] = await Promise.all([
@@ -237,6 +265,8 @@ describe('context and health routes', () => {
       defaultRepresentation: 'ndjson',
       contextModes: ['link', 'inline'],
       defaultContextMode: 'link',
+      jellyVersions: ['1.1', '1.2'],
+      defaultJellyVersion: '1.2',
       cborldRegistryEntryId: 1,
     });
   });

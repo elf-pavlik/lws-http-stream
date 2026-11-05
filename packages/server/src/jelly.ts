@@ -1,15 +1,21 @@
 import {
   DataFactory,
+  LogicalStreamType,
   PhysicalStreamType,
   RdfStreamType,
   RdfVersion,
   Writer,
 } from 'rdfjs-jelly/browser';
+import type { WriterOptions } from 'rdfjs-jelly/browser';
 import type { LwsActivity, LwsNotification } from './notifications.ts';
 
 const { namedNode, literal, quad, defaultGraph } = DataFactory;
 
 export const JELLY_MEDIA_TYPE = 'application/x-jelly-rdf';
+
+export type JellyVersion = '1.1' | '1.2';
+export const JELLY_VERSIONS: readonly JellyVersion[] = ['1.1', '1.2'];
+export const DEFAULT_JELLY_VERSION: JellyVersion = '1.2';
 
 const LWS = 'https://www.w3.org/ns/lws#';
 const AS = 'https://www.w3.org/ns/activitystreams#';
@@ -84,13 +90,31 @@ export interface JellyNotificationEncoder {
 }
 
 /**
- * Jelly-RDF 1.2 (protocol version 3) with explicit RDF Message boundaries.
- * `packMessages: false` emits each notification's frame immediately instead of
- * buffering small messages into a shared frame, keeping delivery incremental.
- * The delimited Writer prefixes each Protobuf frame with its varint length.
+ * Jelly-RDF 1.2 (protocol version 3) is the default. Jelly-RDF 1.1 (protocol
+ * version 2) remains available for clients that request it. Each notification
+ * is written as one RDF Message in 1.2 and as one frame in 1.1; neither mode
+ * buffers the notification until the stream ends. The delimited Writer prefixes
+ * each Protobuf frame with its varint length.
  */
-export function createJellyNotificationEncoder(): JellyNotificationEncoder {
+export function createJellyNotificationEncoder(
+  version: JellyVersion = DEFAULT_JELLY_VERSION,
+): JellyNotificationEncoder {
   let pending: Uint8Array[] = [];
+
+  const format: WriterOptions =
+    version === '1.1'
+      ? {
+          version: 2,
+          physicalType: PhysicalStreamType.QUADS,
+          logicalType: LogicalStreamType.FLAT_QUADS,
+        }
+      : {
+          version: 3,
+          streamType: RdfStreamType.MESSAGES,
+          packMessages: false,
+          physicalType: PhysicalStreamType.QUADS,
+          rdfVersion: RdfVersion.RDF_1_2,
+        };
 
   const writer = new Writer(
     {
@@ -105,11 +129,7 @@ export function createJellyNotificationEncoder(): JellyNotificationEncoder {
     },
     {
       delimited: true,
-      version: 3,
-      streamType: RdfStreamType.MESSAGES,
-      packMessages: false,
-      physicalType: PhysicalStreamType.QUADS,
-      rdfVersion: RdfVersion.RDF_1_2,
+      ...format,
       streamName: 'lws-notifications',
       namespaces: {
         lws: LWS,

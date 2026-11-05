@@ -1,4 +1,5 @@
 export type Representation = 'ndjson' | 'cbor-seq' | 'jelly';
+export type JellyVersion = '1.1' | '1.2';
 
 export interface LwsActivityObject {
   id: string;
